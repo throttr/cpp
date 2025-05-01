@@ -16,6 +16,7 @@
 #include <throttr/service.hpp>
 
 #include <throttr/connection.hpp>
+#include <throttr/exception.hpp>
 #include <utility>
 
 namespace throttr {
@@ -35,8 +36,7 @@ namespace throttr {
 
     bool service::is_ready() const {
         return !connections_.empty() &&
-                   std::ranges::all_of(connections_,
-                                       [](const std::shared_ptr<connection>& c) { return c && c->is_open(); });
+                   std::ranges::all_of(connections_, [](const std::shared_ptr<connection>& c) { return c && c->is_open(); });
 
     }
 
@@ -45,14 +45,14 @@ namespace throttr {
         return connections_[idx];
     }
 
-    boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> &buffer) {
+    boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> buffer) {
         if (connections_.empty()) {
-            throw std::runtime_error("no available connections");
+            throw service_error("no available connections");
         }
 
         const auto conn = get_connection();
         if (!conn || !conn->is_open()) {
-            throw std::runtime_error("picked connection is not open");
+            throw service_error("get connection is not open");
         }
 
         co_return co_await conn->send(buffer);

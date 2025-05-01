@@ -18,6 +18,7 @@
 #include <throttr/response_simple.hpp>
 #include <throttr/response_full.hpp>
 #include <throttr/protocol.hpp>
+#include <throttr/connection.hpp>
 
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/co_spawn.hpp>
@@ -29,7 +30,7 @@ using namespace throttr;
 using namespace boost::asio;
 
 class ServiceTestFixture : public ::testing::Test {
-protected:
+public:
     io_context io;
     std::unique_ptr<service> svc;
 
@@ -138,6 +139,16 @@ TEST_F(ServiceTestFixture, PurgeThenQuery) {
         const auto query_result = co_await svc->send<response_full>(query);
         EXPECT_FALSE(query_result.success);
 
+        co_return;
+    }, detached);
+    io.run();
+}
+
+TEST_F(ServiceTestFixture, IsReadyReturnsTrueWhenAllConnectionsAreOpen) {
+    io.restart();
+    co_spawn(io, [this]() -> awaitable<void> {
+        co_await svc->connect();
+        EXPECT_TRUE(svc->is_ready());
         co_return;
     }, detached);
     io.run();

@@ -77,7 +77,22 @@ namespace throttr {
          * @return awaitable<response>
          */
         template<typename T>
-        [[nodiscard]] boost::asio::awaitable<T> send(const std::vector<std::byte> &buffer);
+        [[nodiscard]] boost::asio::awaitable<T> send(std::vector<std::byte> buffer);
+
+        /**
+         * Send
+         *
+         * @param buffer
+         * @return awaitable<response>
+         */
+        [[nodiscard]] boost::asio::awaitable<std::vector<std::byte>> send_raw(std::vector<std::byte> buffer);
+
+        /**
+         * Get connection
+         *
+         * @return
+         */
+        std::shared_ptr<connection> get_connection();
     private:
         /**
          * Executor
@@ -98,21 +113,6 @@ namespace throttr {
          * Connections
          */
         std::vector<std::shared_ptr<connection>> connections_;
-
-        /**
-         * Get connection
-         *
-         * @return
-         */
-        std::shared_ptr<connection> get_connection();
-
-        /**
-         * Send
-         *
-         * @param buffer
-         * @return awaitable<response>
-         */
-        [[nodiscard]] boost::asio::awaitable<std::vector<std::byte>> send_raw(const std::vector<std::byte> &buffer);
     };
 
     /**
@@ -123,7 +123,7 @@ namespace throttr {
      * @return
      */
     template<typename T>
-    boost::asio::awaitable<T> service::send(const std::vector<std::byte> &buffer) {
+    boost::asio::awaitable<T> service::send(const std::vector<std::byte> buffer) {
         auto raw = co_await send_raw(buffer);
         co_return T::from_buffer(raw);
     }
@@ -133,14 +133,14 @@ namespace throttr {
      *
      * @return awaitable<response_simple>
      */
-    template boost::asio::awaitable<response_simple> service::send<response_simple>(const std::vector<std::byte>&);
+    template boost::asio::awaitable<response_simple> service::send<response_simple>(std::vector<std::byte>);
 
     /**
      * Send implements T as response_full
      *
      * @return awaitable<response_full>
      */
-    template boost::asio::awaitable<response_full> service::send<response_full>(const std::vector<std::byte>&);
+    template boost::asio::awaitable<response_full> service::send<response_full>(std::vector<std::byte>);
 } // namespace throttr
 
 #endif // THROTTR_SERVICE_HPP

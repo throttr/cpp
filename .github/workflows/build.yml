@@ -11,11 +11,6 @@ jobs:
         image: ghcr.io/throttr/throttr:2.1.0-release
         ports:
           - 9000:9000
-        options: >-
-          --health-cmd "bash -c 'echo > /dev/tcp/localhost/9000'" 
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
 
     container:
       image: ghcr.io/throttr/builder-alpine:1.87.0-debug
@@ -28,6 +23,13 @@ jobs:
           cd build
           cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_SDK_TESTS=ON
           make -j4
+          
+          for i in {1..10}; do
+            nc -z localhost 9000 && echo "✅ throttr running ... " && break
+            echo "⏳ Try $i: waiting 1s..."
+            sleep 1
+          done
+          
           ctest  --output-on-failure --verbose
           cd ..
           gcovr --filter='src/' --print-summary --sort-percentage

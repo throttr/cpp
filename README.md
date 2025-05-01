@@ -34,7 +34,7 @@ Add the SDK as a submodule or fetch it directly. Then include it in your CMakeLi
 FetchContent_Declare(
     throttr-sdk
     GIT_REPOSITORY https://github.com/throttr/cpp.git
-    GIT_TAG 2.0.0
+    GIT_TAG 1.0.0
 )
 FetchContent_MakeAvailable(throttr-sdk)
 

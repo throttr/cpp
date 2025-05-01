@@ -84,8 +84,7 @@ namespace throttr {
 
     void connection::handle_write(const std::shared_ptr<write_operation>& op) {
         std::size_t expected = 1;
-        const auto type = std::to_integer<uint8_t>(op->buffer_[0]);
-        if (type == 0x01 || type == 0x02) expected = 18;
+        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x01 || type == 0x02) expected = 18;
 
         auto recv_buf = std::make_shared<std::array<std::byte, 18>>();
         auto self = shared_from_this();

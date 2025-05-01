@@ -50,27 +50,36 @@ int main() {
     constexpr int total = 100'000;
     const std::string resource = "resource";
     const std::string consumer = "consumer";
-    std::atomic<int> remaining{total};
-    auto start = std::chrono::steady_clock::now();
     auto buffer = request_insert_builder(100000, 1, ttl_types::seconds, 10, consumer, resource);
     for (int i = 0; i < total; ++i) {
-        post(io, [&, buffer, &start, &remaining]() {
+        post(io, [&, buffer]() {
             svc.send<response_full>(buffer, [&](boost::system::error_code ec, response_full res) {
-                if (remaining.fetch_sub(1) == 1) {
-                    const auto end = std::chrono::steady_clock::now();
-                    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-                    std::cout << "100.000 insert has been done in " << ms << " ms\n";
-                    io.stop();
-                }
             });
         });
     }
 
-    std::vector<std::thread> threads;
-    for (int i = 0; i < std::thread::hardware_concurrency(); ++i) {
-        threads.emplace_back([&io]() { io.run(); });
-    }
-    for (auto& t : threads) t.join();
+    const auto start = std::chrono::steady_clock::now();
+    io.run();
+    const auto end = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "100.000 insert has been done in " << ms << " ms\n";
+
+    auto bytes_transferred = (buffer.size() + 18) * total; // payload + response
+    double seconds = ms / 1000.0;
+
+    std::cout << "Total transferred: " << bytes_transferred << " bytes\n";
+
+    double kib_per_sec = bytes_transferred / 1024.0 / seconds;
+    double mib_per_sec = kib_per_sec / 1024.0;
+
+    double kb_per_sec  = bytes_transferred / 1000.0 / seconds;
+    double mb_per_sec  = kb_per_sec / 1000.0;
+
+    std::cout << "Bandwidth: " << kib_per_sec << " KiB/s\n";
+    std::cout << "Bandwidth: " << mib_per_sec << " MiB/s\n";
+    std::cout << "Bandwidth: " << kb_per_sec  << " kB/s\n";
+    std::cout << "Bandwidth: " << mb_per_sec  << " MB/s\n";
+
 
     return 0;
 }

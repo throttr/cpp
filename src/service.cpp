@@ -16,6 +16,7 @@
 #include <throttr/service.hpp>
 
 #include <throttr/connection.hpp>
+#include <throttr/exception.hpp>
 #include <utility>
 
 namespace throttr {
@@ -47,12 +48,12 @@ namespace throttr {
 
     boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> &buffer) {
         if (connections_.empty()) {
-            throw std::runtime_error("no available connections");
+            throw service_error("no available connections");
         }
 
         const auto conn = get_connection();
         if (!conn || !conn->is_open()) {
-            throw std::runtime_error("picked connection is not open");
+            throw service_error("picked connection is not open");
         }
 
         co_return co_await conn->send(buffer);

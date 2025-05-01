@@ -17,6 +17,7 @@
 #define THROTTR_RESPONSE_FULL_HPP
 
 #include <throttr/protocol.hpp>
+#include <throttr/exception.hpp>
 
 #include <cstddef>
 #include <vector>
@@ -57,7 +58,7 @@ namespace throttr {
          */
         static response_full from_buffer(const std::vector<std::byte>& buffer) {
             if (buffer.size() != 18) {
-                throw std::runtime_error("response_full: invalid buffer size");
+                throw response_error("response_full: invalid buffer size");
             }
 
             response_full resp;

@@ -13,41 +13,25 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef THROTTR_RESPONSE_SIMPLE_HPP
-#define THROTTR_RESPONSE_SIMPLE_HPP
+#ifndef THROTTR_EXCEPTION_HPP
+#define THROTTR_EXCEPTION_HPP
 
-#include <throttr/exception.hpp>
-
-#include <vector>
 #include <stdexcept>
-#include <cstddef>
 
 namespace throttr {
     /**
-     * Response simple
+     * Response error
      */
-    struct response_simple {
-        /**
-         * Success
-         */
-        bool success = false;
+    struct response_error final : std::runtime_error {
+        using runtime_error::runtime_error;
+    };
 
-        /**
-         * From buffer
-         *
-         * @param buffer
-         * @return response_simple
-         */
-        static response_simple from_buffer(const std::vector<std::byte>& buffer) {
-            if (buffer.size() != 1) {
-                throw response_error("response_simple: invalid buffer size");
-            }
-
-            return response_simple{
-                .success = (buffer[0] == std::byte{0x01})
-            };
-        }
+    /**
+     * Service error
+     */
+    struct service_error final : std::runtime_error {
+        using runtime_error::runtime_error;
     };
 }
 
-#endif // THROTTR_RESPONSE_SIMPLE_HPP
+#endif // THROTTR_EXCEPTION_HPP

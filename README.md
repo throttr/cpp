@@ -68,26 +68,26 @@ int main() {
 
     co_spawn(io, [&]() -> awaitable<void> {
         service_config cfg{ "127.0.0.1", 9000, 4 };
-    service svc(co_await this_coro::executor, cfg);
-    co_await svc.connect();
-
-    auto req = request_insert_builder(
-        10, 0,
-        ttl_types::seconds, 30,
-        "user:abc", "/api/resource"
-    );
-
-    auto res = co_await svc.send<response_full>(req);
-
-    if (res.success) {
-        std::cout << "Allowed ✅" << std::endl;
-        std::cout << "Quota remaining: " << res.quota_remaining << std::endl;
-    } else {
-        std::cout << "Denied ❌" << std::endl;
-    }
-
-    co_return;
-}, detached);
+        service svc(co_await this_coro::executor, cfg);
+        co_await svc.connect();
+    
+        auto req = request_insert_builder(
+            10, 0,
+            ttl_types::seconds, 30,
+            "user:abc", "/api/resource"
+        );
+    
+        auto res = co_await svc.send<response_full>(req);
+    
+        if (res.success) {
+            std::cout << "Allowed ✅" << std::endl;
+            std::cout << "Quota remaining: " << res.quota_remaining << std::endl;
+        } else {
+            std::cout << "Denied ❌" << std::endl;
+        }
+    
+        co_return;
+    }, detached);
 
     io.run();
     return 0;

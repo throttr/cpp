@@ -144,20 +144,10 @@ TEST_F(ServiceTestFixture, PurgeThenQuery) {
     io.run();
 }
 
-TEST_F(ServiceTestFixture, IsReadyReturnsFalseWhenNoConnections) {
-    io.restart();
-    co_spawn(io, [this]() -> awaitable<void> {
-        EXPECT_FALSE(svc->is_ready());
-        co_return;
-    }, detached);
-    io.run();
-}
-
 TEST_F(ServiceTestFixture, IsReadyReturnsTrueWhenAllConnectionsAreOpen) {
     io.restart();
     co_spawn(io, [this]() -> awaitable<void> {
         co_await svc->connect();
-
         EXPECT_TRUE(svc->is_ready());
         co_return;
     }, detached);

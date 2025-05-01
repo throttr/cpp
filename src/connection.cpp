@@ -20,6 +20,7 @@
 #include <boost/asio/read.hpp>
 #include <array>
 #include <iomanip>
+#include <iostream>
 
 namespace throttr {
     connection::connection(const boost::asio::any_io_executor &executor, std::string host, const uint16_t port)
@@ -39,6 +40,8 @@ namespace throttr {
                                     boost::asio::async_connect(socket_, endpoints,
                                                                [self, final_handler = std::move(scope_handler)](
                                                            const boost::system::error_code &connect_ec, auto) mutable {
+
+                                                                   self->socket_.set_option(boost::asio::ip::tcp::no_delay(true));
                                                                    final_handler(connect_ec);
                                                                });
                                 });
@@ -88,23 +91,21 @@ namespace throttr {
 
     void connection::handle_write(const std::shared_ptr<write_operation>& op) {
         std::size_t expected = 1;
-        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x01 || type == 0x02) expected = 18;
+        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x01 || type == 0x02)
+            expected = 18;
 
-        auto buffer = std::make_shared<std::array<std::byte, 18>>();
+        auto response_buffer = std::make_shared<std::vector<std::byte>>(expected);
         auto self = shared_from_this();
 
         boost::asio::async_read(
-            socket_, boost::asio::buffer(*buffer),
+            socket_, boost::asio::buffer(*response_buffer),
             boost::asio::transfer_exactly(expected),
             boost::asio::bind_executor(strand_,
-                [self, op, buffer](boost::system::error_code ec, std::size_t n) mutable {
-                    // LCOV_EXCL_START
+                [self, op, response_buffer](const boost::system::error_code &ec, const std::size_t n) mutable {
                     if (ec) {
                         op->handler(ec, {});
                     } else {
-                        // LCOV_EXCL_STOP
-                        std::vector<std::byte> response(buffer->begin(), buffer->begin() + n);
-                        op->handler({}, std::move(response));
+                        op->handler({}, std::move(*response_buffer));
                     }
                     self->do_write();
                 }));

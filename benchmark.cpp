@@ -60,7 +60,9 @@ int main() {
     }
 
     const auto start = std::chrono::steady_clock::now();
+    std::puts("Running ...");
     io.run();
+    std::puts("Ran ...");
     const auto end = std::chrono::steady_clock::now();
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << "100.000 insert has been done in " << ms << " ms\n";

@@ -35,8 +35,8 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(throttr-protocol)
 
-file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS src/include/*.hpp)
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
+include_directories(src/include)
+file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 add_library(throttr-sdk STATIC ${HEADERS} ${SOURCES})
 
@@ -71,11 +71,6 @@ if (BUILD_SDK_TESTS)
             throttr-sdk
             GTest::gtest_main
             throttr::protocol
-    )
-
-    target_include_directories(throttr-sdk-tests
-            PRIVATE
-            src/include
     )
 
     include(GoogleTest)

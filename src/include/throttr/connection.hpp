@@ -42,7 +42,7 @@ namespace throttr {
          * @param host
          * @param port
          */
-        connection(boost::asio::any_io_executor executor, std::string host, uint16_t port);
+        connection(const boost::asio::any_io_executor &executor, std::string host, uint16_t port);
 
         /**
          * Connect

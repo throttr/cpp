@@ -23,7 +23,7 @@
 #include <array>
 
 namespace throttr {
-    connection::connection(boost::asio::any_io_executor executor, std::string host, const uint16_t port)
+    connection::connection(const boost::asio::any_io_executor & executor, std::string host, const uint16_t port)
         : strand_(make_strand(executor)),
           resolver_(strand_),
           socket_(strand_),

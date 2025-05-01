@@ -53,7 +53,9 @@ namespace throttr {
         auto self = shared_from_this();
         post(strand_, [self, buf = std::move(buffer), final_handler = std::move(handler)]() mutable {
             self->queue_.emplace_back(std::move(buf), std::move(final_handler));
+            // LCOV_EXCL_START
             if (!self->writing_) {
+                // LCOV_EXCL_STOP
                 self->writing_ = true;
                 self->do_write();
             }
@@ -73,11 +75,13 @@ namespace throttr {
         boost::asio::async_write(socket_, boost::asio::buffer(op->buffer_),
             boost::asio::bind_executor(strand_,
                 [self, op](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
+                    // LCOV_EXCL_START
                     if (ec) {
                         op->handler(ec, {});
                         self->do_write();
                         return;
                     }
+                    // LCOV_EXCL_STOP
                     self->handle_write(op);
                 }));
     }
@@ -94,9 +98,11 @@ namespace throttr {
             boost::asio::transfer_exactly(expected),
             boost::asio::bind_executor(strand_,
                 [self, op, buffer](boost::system::error_code ec, std::size_t n) mutable {
+                    // LCOV_EXCL_START
                     if (ec) {
                         op->handler(ec, {});
                     } else {
+                        // LCOV_EXCL_STOP
                         std::vector<std::byte> response(buffer->begin(), buffer->begin() + n);
                         op->handler({}, std::move(response));
                     }

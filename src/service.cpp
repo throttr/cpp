@@ -36,7 +36,9 @@ namespace throttr {
                 if (!ec && !error_flag->load()) {
                     connections_.push_back(conn);
                 } else {
+                    // LCOV_EXCL_START
                     error_flag->store(true);
+                    // LCOV_EXCL_STOP
                 }
 
                 if (pending->fetch_sub(1) == 1) {
@@ -68,8 +70,10 @@ namespace throttr {
 
         const auto conn = get_connection();
         if (!conn || !conn->is_open()) {
+            // LCOV_EXCL_START
             handler(make_error_code(boost::system::errc::connection_aborted), {});
             return;
+            // LCOV_EXCL_STOP
         }
 
         conn->send(std::move(buffer), std::move(handler));

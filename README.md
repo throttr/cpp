@@ -2,7 +2,7 @@
 
 <p align="center">
 <a href="https://github.com/throttr/cpp/actions/workflows/build.yml"><img src="https://github.com/throttr/cpp/actions/workflows/build.yml/badge.svg" alt="Build"></a>
-<a href="https://codecov.io/gh/throttr/cpp"><img src="https://codecov.io/gh/throttr/cpp/graph/badge.svg?token=7YG7SJ3FFM" alt="Coverage"></a>
+<a href="https://codecov.io/gh/throttr/cpp"><img src="https://codecov.io/gh/throttr/cpp/graph/badge.svg?token=5CVNFBAMTD" alt="Coverage"></a>
 <a href="https://sonarcloud.io/project/overview?id=throttr_cpp"><img src="https://sonarcloud.io/api/project_badges/measure?project=throttr_cpp&metric=alert_status" alt="Quality Gate"></a>
 </p>
 

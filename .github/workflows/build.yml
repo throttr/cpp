@@ -1,0 +1,42 @@
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      throttr:
+        image: ghcr.io/throttr/throttr:2.1.0-release
+        ports:
+          - 9000:9000
+
+    container:
+      image: ghcr.io/throttr/builder-alpine:1.87.0-debug
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_SDK_TESTS=ON
+          make -j4
+          
+          for i in {1..10}; do
+            nc -z throttr 9000 && echo "✅ throttr running ... " && break
+            echo "⏳ Try $i: waiting 1s..."
+            sleep 1
+          done
+          
+          nc -z throttr 9000 || (echo "❌ throttr isn't running on port 9000" && exit 1)
+          
+          ctest  --output-on-failure --verbose
+          cd ..
+          gcovr --filter='src/' --print-summary --sort-percentage
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}

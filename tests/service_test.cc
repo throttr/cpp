@@ -35,7 +35,7 @@ protected:
 
     void SetUp() override {
         co_spawn(io, [this]() -> awaitable<void> {
-            service_config cfg{ "127.0.0.1", 9000, 4 };
+            service_config cfg{ "throttr", 9000, 4 };
             svc = std::make_unique<service>(co_await this_coro::executor, cfg);
             co_await svc->connect();
             co_return;

@@ -17,20 +17,16 @@
 #include <throttr/service.hpp>
 #include <throttr/exception.hpp>
 #include <boost/asio/io_context.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/use_awaitable.hpp>
 
 using namespace throttr;
-using namespace boost::asio;
 
 class ServiceRawErrorTest : public ::testing::Test {
 public:
-    io_context io;
+    boost::asio::io_context io;
     std::unique_ptr<service> svc;
 
     void SetUp() override {
-        service_config cfg{ "127.0.0.1", 9000, 4 };
+        service_config cfg{ "throttr", 9000, 4 };
         svc = std::make_unique<service>(io.get_executor(), cfg);
     }
 
@@ -42,19 +38,17 @@ public:
 TEST_F(ServiceRawErrorTest, ThrowsWhenNoConnectionsAvailable) {
     io.restart();
 
-    bool threw_expected = false;
+    bool error_triggered = false;
 
-    co_spawn(io, [this, &threw_expected]() -> awaitable<void> {
-        const std::vector dummy_buffer(1, std::byte{0x01});
-        try {
-            co_await svc->send_raw(dummy_buffer);
-        } catch (const service_error& e) {
-            threw_expected = std::string(e.what()) == "no available connections";
+    const std::vector dummy_buffer(1, std::byte{0x01});
+
+    svc->send_raw(dummy_buffer, [&](boost::system::error_code ec, std::vector<std::byte>) { // NOSONAR
+        if (ec == boost::system::errc::not_connected) {
+            error_triggered = true;
         }
-        co_return;
-    }, detached);
+    });
 
     io.run();
 
-    ASSERT_TRUE(threw_expected) << "Expected service_error with message 'no available connections'";
+    ASSERT_TRUE(error_triggered) << "Expected error due to no available connections";
 }

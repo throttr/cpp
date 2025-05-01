@@ -34,7 +34,7 @@ Add the SDK as a submodule or fetch it directly. Then include it in your CMakeLi
 FetchContent_Declare(
     throttr-sdk
     GIT_REPOSITORY https://github.com/throttr/cpp.git
-    GIT_TAG 1.0.0
+    GIT_TAG 2.0.0
 )
 FetchContent_MakeAvailable(throttr-sdk)
 
@@ -56,38 +56,42 @@ This SDK depends on Boost.Asio. Make sure Boost 1.87+ is available, with the fol
 #include <throttr/protocol.hpp>
 
 #include <boost/asio/io_context.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
 #include <iostream>
 
 using namespace throttr;
-using namespace boost::asio;
 
 int main() {
-    io_context io;
+    boost::asio::io_context io;
+    service_config cfg{ "127.0.0.1", 9000, 4 };
 
-    co_spawn(io, [&]() -> awaitable<void> {
-        service_config cfg{ "127.0.0.1", 9000, 4 };
-        service svc(co_await this_coro::executor, cfg);
-        co_await svc.connect();
-    
+    auto svc = std::make_shared<service>(io.get_executor(), cfg);
+
+    svc->connect([svc](const boost::system::error_code &connect_ec) {
+        if (connect_ec) {
+            std::cerr << "Connection failed: " << connect_ec.message() << "\n";
+            return;
+        }
+
         auto req = request_insert_builder(
             10, 0,
             ttl_types::seconds, 30,
             "user:abc", "/api/resource"
         );
-    
-        auto res = co_await svc.send<response_full>(req);
-    
-        if (res.success) {
-            std::cout << "Allowed ✅" << std::endl;
-            std::cout << "Quota remaining: " << res.quota_remaining << std::endl;
-        } else {
-            std::cout << "Denied ❌" << std::endl;
-        }
-    
-        co_return;
-    }, detached);
+
+        svc->send<response_full>(req, [svc](const boost::system::error_code &send_ec, response_full res) {
+            if (send_ec) {
+                std::cerr << "Send failed: " << send_ec.message() << "\n";
+                return;
+            }
+
+            if (res.success) {
+                std::cout << "Allowed ✅\n";
+                std::cout << "Quota remaining: " << res.quota_remaining << "\n";
+            } else {
+                std::cout << "Denied ❌\n";
+            }
+        });
+    });
 
     io.run();
     return 0;

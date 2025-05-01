@@ -18,26 +18,41 @@
 #include <throttr/connection.hpp>
 #include <throttr/exception.hpp>
 #include <utility>
+#include <memory>
 
 namespace throttr {
-    service::service(boost::asio::any_io_executor ex, service_config cfg)
-    : executor_(std::move(ex)), config_(std::move(cfg)) {}
 
-    boost::asio::awaitable<void> service::connect() {
-        co_await boost::asio::co_spawn(executor_, [this]() -> boost::asio::awaitable<void> {
-            for (std::size_t i = 0; i < config_.max_connections_; ++i) {
-                auto conn = std::make_shared<connection>(executor_, config_.host_, config_.port_);
-                co_await conn->connect();
-                connections_.push_back(conn);
-            }
-            co_return;
-        }, boost::asio::use_awaitable);
+    service::service(boost::asio::any_io_executor ex, service_config cfg)
+        : executor_(std::move(ex)), config_(std::move(cfg)) {}
+
+    void service::connect(std::function<void(boost::system::error_code)> handler) {
+        auto shared_handler = std::make_shared<std::function<void(boost::system::error_code)>>(std::move(handler));
+        auto pending = std::make_shared<std::atomic_size_t>(config_.max_connections_);
+        auto error_flag = std::make_shared<std::atomic_bool>(false);
+
+        for (std::size_t i = 0; i < config_.max_connections_; ++i) {
+            auto conn = std::make_shared<connection>(executor_, config_.host_, config_.port_);
+            conn->connect([this, conn, pending, shared_handler, error_flag](boost::system::error_code ec) {
+                if (!ec && !error_flag->load()) {
+                    connections_.push_back(conn);
+                } else {
+                    // LCOV_EXCL_START
+                    error_flag->store(true);
+                    // LCOV_EXCL_STOP
+                }
+
+                if (pending->fetch_sub(1) == 1) {
+                    (*shared_handler)(error_flag->load() ? boost::asio::error::operation_aborted : boost::system::error_code{});
+                }
+            });
+        }
     }
 
     bool service::is_ready() const {
         return !connections_.empty() &&
-                   std::ranges::all_of(connections_, [](const std::shared_ptr<connection>& c) { return c && c->is_open(); });
-
+               std::ranges::all_of(connections_, [](const std::shared_ptr<connection>& c) {
+                   return c && c->is_open();
+               });
     }
 
     std::shared_ptr<connection> service::get_connection() {
@@ -45,16 +60,23 @@ namespace throttr {
         return connections_[idx];
     }
 
-    boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> buffer) {
+    void service::send_raw(std::vector<std::byte> buffer,
+                           std::function<void(boost::system::error_code, std::vector<std::byte>)> handler) {
         if (connections_.empty()) {
-            throw service_error("no available connections");
+            handler(make_error_code(boost::system::errc::not_connected), {});
+            return;
         }
+
 
         const auto conn = get_connection();
         if (!conn || !conn->is_open()) {
-            throw service_error("get connection is not open");
+            // LCOV_EXCL_START
+            handler(make_error_code(boost::system::errc::connection_aborted), {});
+            return;
+            // LCOV_EXCL_STOP
         }
 
-        co_return co_await conn->send(buffer);
+        conn->send(std::move(buffer), std::move(handler));
     }
+
 }

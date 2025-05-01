@@ -18,12 +18,11 @@
 #include <boost/asio/connect.hpp>
 #include <boost/asio/write.hpp>
 #include <boost/asio/read.hpp>
-#include <boost/asio/experimental/awaitable_operators.hpp>
-#include <boost/asio/experimental/channel.hpp>
 #include <array>
+#include <iomanip>
 
 namespace throttr {
-    connection::connection(const boost::asio::any_io_executor & executor, std::string host, const uint16_t port)
+    connection::connection(const boost::asio::any_io_executor &executor, std::string host, const uint16_t port)
         : strand_(make_strand(executor)),
           resolver_(strand_),
           socket_(strand_),
@@ -31,82 +30,83 @@ namespace throttr {
           port_(port) {
     }
 
-    boost::asio::awaitable<void> connection::connect() {
-        auto endpoints = co_await resolver_.async_resolve(host_, std::to_string(port_), boost::asio::use_awaitable);
-        co_await async_connect(socket_, endpoints, boost::asio::use_awaitable);
+    void connection::connect(std::function<void(boost::system::error_code)> handler) {
+        resolver_.async_resolve(host_, std::to_string(port_),
+                                [this, self = shared_from_this(), scope_handler = std::move(handler)](
+                            const boost::system::error_code &ec, const auto& endpoints) mutable {
+                                    if (ec) return scope_handler(ec);
+
+                                    boost::asio::async_connect(socket_, endpoints,
+                                                               [self, final_handler = std::move(scope_handler)](
+                                                           const boost::system::error_code &connect_ec, auto) mutable {
+                                                                   final_handler(connect_ec);
+                                                               });
+                                });
     }
 
     bool connection::is_open() const {
         return socket_.is_open();
     }
 
-    boost::asio::awaitable<void> connection::do_write() {
-
-        while (true) {
-            std::vector<std::byte> buffer;
-            std::shared_ptr<boost::asio::experimental::channel<void(boost::system::error_code, std::vector<std::byte>)>> ch;
-
-            {
-                std::scoped_lock lock(mutex_);
-
-                if (write_queue_.empty()) {
-                    writing_ = false;
-                    co_return;
-                }
-
-                buffer = std::move(write_queue_.front());
-                write_queue_.pop_front();
-
-                ch = std::move(pending_responses_.front());
-                pending_responses_.pop_front();
+    void connection::send(std::vector<std::byte> buffer,
+                          std::function<void(boost::system::error_code, std::vector<std::byte>)> handler) {
+        auto self = shared_from_this();
+        post(strand_, [self, buf = std::move(buffer), final_handler = std::move(handler)]() mutable {
+            self->queue_.emplace_back(std::move(buf), std::move(final_handler));
+            // LCOV_EXCL_START
+            if (!self->writing_) {
+                // LCOV_EXCL_STOP
+                self->writing_ = true;
+                self->do_write();
             }
-
-            co_await async_write(socket_, boost::asio::buffer(buffer), boost::asio::use_awaitable);
-
-            std::array<std::byte, 18> recv_buf{};
-            std::size_t expected_response_size = 1;
-            const auto type = std::to_integer<uint8_t>(buffer[0]);
-            if (type == 0x01 || type == 0x02) {
-                expected_response_size = 18;
-            }
-
-            std::size_t n = co_await async_read(socket_, boost::asio::buffer(recv_buf),
-                                                boost::asio::transfer_exactly(expected_response_size),
-                                                boost::asio::use_awaitable);
-
-            std::vector response(recv_buf.begin(), recv_buf.begin() + n);
-            co_await ch->async_send({}, std::move(response));
-        }
-
-        co_return;
+        });
     }
 
-    boost::asio::awaitable<std::vector<std::byte> > connection::send(std::vector<std::byte> buffer) {
-        const auto ex = co_await boost::asio::this_coro::executor;
-        auto ch = std::make_shared<boost::asio::experimental::channel<void(boost::system::error_code, std::vector<std::byte>)>>(ex, 1);
-
-        bool need_write = false;
-
-        {
-            std::scoped_lock lock(mutex_);
-            write_queue_.emplace_back(std::move(buffer));
-            pending_responses_.emplace_back(ch);
-
-            if (!writing_) {
-                writing_ = true;
-                need_write = true;
-            }
+    void connection::do_write() {
+        if (queue_.empty()) {
+            writing_ = false;
+            return;
         }
 
-        if (need_write) {
-            co_spawn(strand_, [this]() -> boost::asio::awaitable<void> {
-                co_await do_write();
-                co_return;
-            }, boost::asio::detached);
-        }
+        auto op = std::make_shared<write_operation>(std::move(queue_.front()));
+        queue_.pop_front();
 
-        auto [ec, response] = co_await ch->async_receive(boost::asio::as_tuple);
-        if (ec) throw boost::system::system_error(ec);
-        co_return response;
+        auto self = shared_from_this();
+        boost::asio::async_write(socket_, boost::asio::buffer(op->buffer_),
+            boost::asio::bind_executor(strand_,
+                [self, op](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
+                    // LCOV_EXCL_START
+                    if (ec) {
+                        op->handler(ec, {});
+                        self->do_write();
+                        return;
+                    }
+                    // LCOV_EXCL_STOP
+                    self->handle_write(op);
+                }));
+    }
+
+    void connection::handle_write(const std::shared_ptr<write_operation>& op) {
+        std::size_t expected = 1;
+        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x01 || type == 0x02) expected = 18;
+
+        auto buffer = std::make_shared<std::array<std::byte, 18>>();
+        auto self = shared_from_this();
+
+        boost::asio::async_read(
+            socket_, boost::asio::buffer(*buffer),
+            boost::asio::transfer_exactly(expected),
+            boost::asio::bind_executor(strand_,
+                [self, op, buffer](boost::system::error_code ec, std::size_t n) mutable {
+                    // LCOV_EXCL_START
+                    if (ec) {
+                        op->handler(ec, {});
+                    } else {
+                        // LCOV_EXCL_STOP
+                        std::vector<std::byte> response(buffer->begin(), buffer->begin() + n);
+                        op->handler({}, std::move(response));
+                    }
+                    self->do_write();
+                }));
     }
 }

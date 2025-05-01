@@ -1,149 +1,86 @@
+// Copyright (C) 2025 Ian Torres
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#include <throttr/service.hpp>
+#include <throttr/response_simple.hpp>
+#include <throttr/response_full.hpp>
+#include <throttr/protocol.hpp>
+
+#include <boost/asio/io_context.hpp>
+#include <boost/asio/post.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <iostream>
 #include <vector>
-#include <chrono>
 #include <atomic>
-#include <boost/asio/io_context.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/use_awaitable.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio.hpp>
-#include <throttr/service.hpp>
-#include <throttr/protocol.hpp>
-#include <memory>
 #include <thread>
+#include <chrono>
 
-using namespace boost::asio;
 using namespace throttr;
-
-using boost::asio::awaitable;
-using boost::asio::use_awaitable;
-
-
-class Benchmark {
-public:
-    Benchmark(io_context &io_context, service &service)
-        : io_context_(io_context), service_(service) {
-    }
-
-    awaitable<void> consume_insert_only() {
-        const std::string consumer_id = "consumer:insert-only";
-        const std::string resource_id = "/api/insert-only";
-
-        constexpr int total = 1'000'000;
-        const auto ex = co_await this_coro::executor;
-
-        std::atomic e = total;
-        for (int i = 0; i < total; ++i) {
-            co_spawn(io_context_, [this, consumer_id, resource_id, total, &e]() -> awaitable<void> {
-                co_await service_.send<response_full>(
-                        request_insert_builder(total, 1, ttl_types::seconds, 5, consumer_id, resource_id));
-                --e;
-                co_return;
-            }, detached);
-        }
-
-        while (e.load(std::memory_order_acquire) > 0) {
-            co_await steady_timer(io_context_, chrono::nanoseconds(100)).async_wait(use_awaitable);
-        }
-
-        co_return;
-    }
-
-    awaitable<void> consume_insert_and_update() const {
-        const std::string consumer_id = "consumer:insert-update";
-        const std::string resource_id = "/api/insert-update";
-
-        constexpr int total = 100'000;
-
-        const auto insert_consume = request_insert_builder(total, 1, ttl_types::seconds, 10, consumer_id, resource_id);
-        const auto response = co_await service_.send<response_full>(insert_consume);
-        if (!response.success) {
-            co_return;
-        }
-
-        int remaining = total - 1;
-        const auto ex = co_await this_coro::executor;
-
-        while (remaining > 0) {
-            co_await service_.send<response_simple>(
-                request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer_id, resource_id));
-            --remaining;
-        }
-
-        co_return;
-    }
-
-    awaitable<void> run_benchmark() {
-        std::cout << std::endl << "Benchmark #1 - Quota: 1.000.000, Usage: 1, TTL Type: Seconds - Using only Insert" <<
-                std::endl;
-        const auto start_insert_only = std::chrono::high_resolution_clock::now();
-        co_await consume_insert_only();
-        const auto end_insert_only = std::chrono::high_resolution_clock::now();
-        std::cout << "Benchmark #1 completed. " << std::endl;
-        const auto insert_only_elapsed_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            end_insert_only - start_insert_only).count();
-        const auto insert_only_elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
-            end_insert_only - start_insert_only).count();
-        std::cout << "Time: " << insert_only_elapsed_nanoseconds << " nanoseconds." << std::endl;
-        std::cout << "Time: " << insert_only_elapsed_milliseconds << " milliseconds." << std::endl << std::endl;
-
-        std::cout << "Benchmark #2 - Quota: 10'000, Usage: 1, TTL Type: Seconds - Using Insert and Updates" << std::endl;
-        const auto start_insert_and_update = std::chrono::high_resolution_clock::now();
-        co_await consume_insert_and_update();
-        const auto end_insert_and_update = std::chrono::high_resolution_clock::now();
-        std::cout << "Benchmark #2 completed. " << std::endl;
-        const auto insert_and_update_elapsed_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(end_insert_and_update - start_insert_and_update).count();
-        const auto insert_and_update_elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end_insert_and_update - start_insert_and_update).count();
-        std::cout << "Time: " << insert_and_update_elapsed_nanoseconds << " nanoseconds." << std::endl;
-        std::cout << "Time: " << insert_and_update_elapsed_milliseconds << " milliseconds." << std::endl << std::endl;
-
-        co_return;
-    }
-
-private:
-    io_context &io_context_;
-    service &service_;
-    std::atomic<int> pending_ = 10000;
-};
+using namespace boost::asio;
 
 int main() {
-    io_context io_context;
-    const service_config config = {"throttr", 9000, 10};
-    service _service(io_context.get_executor(), config);
+    io_context io { static_cast<int>(std::thread::hardware_concurrency()) };
+    const service_config cfg = { "throttr", 9000, 10 };
+    service svc(io.get_executor(), cfg);
 
-    std::atomic _connected = false;
-
-    co_spawn(io_context, [&_service, &_connected]() -> awaitable<void> {
-        std::puts("Running the service ...");
-        co_await _service.connect();
-        std::puts("Service is running ...");
-        _connected = true;
-        co_return;
-    }, detached);
-
-    co_spawn(io_context, [&_connected, &io_context, &_service]() -> awaitable<void> {
-        while (!_connected) {
-            std::puts("Waiting for service to be connected ...");
-            co_await steady_timer(io_context, chrono::seconds(1)).async_wait(use_awaitable);
+    bool ready = false;
+    svc.connect([&](boost::system::error_code ec) { // NOSONAR
+        if (ec) {
+            std::cerr << "Connection error: " << ec.message() << "\n";
+            return;
         }
+        ready = true;
+    });
 
-        std::puts("Service is connected. Starting benchmark...");
-        Benchmark benchmark(io_context, _service);
-        co_await benchmark.run_benchmark();
+    while (!ready) io.run_one();
+    io.restart();
 
-        co_return;
-    }, detached);
+    constexpr int total = 100'000;
+    const std::string resource = "resource";
+    const std::string consumer = "consumer";
+    auto buffer = request_insert_builder(100000, 1, ttl_types::seconds, 10, consumer, resource);
+    for (int i = 0; i < total; ++i) {
+        post(io, [&, buffer]() {
+            svc.send<response_full>(buffer, [&](boost::system::error_code ec, response_full res) {
+                // This scope doesn't requires operations
+            });
+        });
+    }
 
+    const auto start = std::chrono::steady_clock::now();
+    io.run();
+    const auto end = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << "100.000 insert has been done in " << ms << " ms\n";
 
-    std::vector<std::jthread> _threads_container;
-    _threads_container.reserve(3);
-    for (auto _i = 2; _i > 0; --_i)
-        _threads_container.emplace_back([&io_context] { io_context.run(); });
-    io_context.run();
+    auto bytes_transferred = (buffer.size() + 18) * total; // payload + response
+    double seconds = ms / 1000.0;
 
-    for (auto& _thead : _threads_container)
-        _thead.join();
+    std::cout << "Total transferred: " << bytes_transferred << " bytes\n";
+
+    double kib_per_sec = bytes_transferred / 1024.0 / seconds;
+    double mib_per_sec = kib_per_sec / 1024.0;
+
+    double kb_per_sec  = bytes_transferred / 1000.0 / seconds;
+    double mb_per_sec  = kb_per_sec / 1000.0;
+
+    std::cout << "Bandwidth: " << kib_per_sec << " KiB/s\n";
+    std::cout << "Bandwidth: " << mib_per_sec << " MiB/s\n";
+    std::cout << "Bandwidth: " << kb_per_sec  << " kB/s\n";
+    std::cout << "Bandwidth: " << mb_per_sec  << " MB/s\n";
+
 
     return 0;
 }

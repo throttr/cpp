@@ -18,22 +18,24 @@
 
 #pragma once
 
+
+#include <throttr/write_operation.hpp>
+
 #include <string>
 #include <vector>
+#include <functional>
+#include <deque>
+#include <mutex>
+#include <atomic>
 #include <boost/asio.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/experimental/channel.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <mutex>
-#include <deque>
-#include <atomic>
 
 namespace throttr {
     /**
      * Connection
      */
-    class connection {
+    class connection : public std::enable_shared_from_this<connection> {
     public:
         /**
          * Constructor
@@ -42,28 +44,23 @@ namespace throttr {
          * @param host
          * @param port
          */
-        connection(const boost::asio::any_io_executor &executor, std::string host, uint16_t port);
+        connection(const boost::asio::any_io_executor& executor, std::string host, uint16_t port);
 
         /**
          * Connect
-         * @return awaitable<void>
+         *
+         * @param handler
          */
-        boost::asio::awaitable<void> connect();
+        void connect(std::function<void(boost::system::error_code)> handler);
 
         /**
          * Send
          *
          * @param buffer
-         * @return awaitable<vector<byte>>
+         * @param handler
          */
-        boost::asio::awaitable<std::vector<std::byte>> send(std::vector<std::byte> buffer);
-
-        /**
-         * Do write
-         *
-         * @return
-         */
-        boost::asio::awaitable<void> do_write();
+        void send(std::vector<std::byte> buffer,
+                  std::function<void(boost::system::error_code, std::vector<std::byte>)> handler);
 
         /**
          * Is open
@@ -73,6 +70,17 @@ namespace throttr {
         [[nodiscard]] bool is_open() const;
 
     private:
+        /**
+         * Do write
+         */
+        void do_write();
+
+        /**
+         * Handle
+         * @param op
+         */
+        void handle_write(const std::shared_ptr<write_operation>& op);
+
         /**
          * Strand
          */
@@ -99,25 +107,14 @@ namespace throttr {
         uint16_t port_;
 
         /**
-         * Mutex
-         */
-        std::mutex mutex_;
-
-        /**
          * Queue
          */
-        std::deque<std::vector<std::byte>> write_queue_;
+        std::deque<write_operation> queue_;
 
         /**
-         * Writing
+         * Writing flag
          */
         bool writing_ = false;
-
-
-        /**
-         * Channel
-         */
-        std::deque<std::shared_ptr<boost::asio::experimental::channel<void(boost::system::error_code, std::vector<std::byte>)>>> pending_responses_;
     };
 
 } // namespace throttr

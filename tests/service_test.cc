@@ -21,10 +21,7 @@
 #include <throttr/connection.hpp>
 
 #include <boost/asio/io_context.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/steady_timer.hpp>
-#include <boost/asio/use_awaitable.hpp>
+
 
 using namespace throttr;
 using namespace boost::asio;
@@ -35,13 +32,17 @@ public:
     std::unique_ptr<service> svc;
 
     void SetUp() override {
-        co_spawn(io, [this]() -> awaitable<void> {
-            service_config cfg{ "throttr", 9000, 4 };
-            svc = std::make_unique<service>(co_await this_coro::executor, cfg);
-            co_await svc->connect();
-            co_return;
-        }, detached);
-        io.run();
+        service_config cfg{ "throttr", 9000, 4 };
+        svc = std::make_unique<service>(io.get_executor(), cfg);
+
+        bool ready = false;
+        svc->connect([&](boost::system::error_code ec) { // NOSONAR
+            EXPECT_FALSE(ec);
+            ready = true;
+        });
+
+        while (!ready) io.run_one(); // ejecuta solo lo necesario para conectar
+        io.restart(); // ← ¡esta parte es clave!
     }
 
     void TearDown() override {
@@ -50,106 +51,161 @@ public:
 };
 
 TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
-    io.restart();
-    co_spawn(io, [this]() -> awaitable<void> {
-        const std::string consumer = "user:insert-and-query";
-        const std::string resource = "/api/insert-and-query";
 
-        const auto insert = request_insert_builder(
-            5, 0,
-            ttl_types::seconds, 5,
-            consumer, resource
-        );
-        const auto insert_result = co_await svc->send<response_full>(insert);
+    ::testing::GTEST_FLAG(output) = "stream";
+    std::cout << std::unitbuf; // Flush en cada línea
 
-        EXPECT_TRUE(insert_result.success);
-        EXPECT_EQ(insert_result.quota_remaining, 5);
-        EXPECT_EQ(insert_result.ttl_type, ttl_types::seconds);
+    const std::string consumer = "user:insert-and-query";
+    const std::string resource = "/api/insert-and-query";
 
-        const auto query = request_query_builder(consumer, resource);
-        const auto query_result = co_await svc->send<response_full>(query);
+    bool finished = false;
 
-        EXPECT_TRUE(query_result.success);
-        EXPECT_EQ(query_result.quota_remaining, 5);
-        EXPECT_EQ(query_result.ttl_type, ttl_types::seconds);
 
-        co_return;
-    }, detached);
+    auto insert = request_insert_builder(5, 0, ttl_types::seconds, 5, consumer, resource);
+
+    svc->send_raw(insert,
+        [&](boost::system::error_code ec, std::vector<std::byte> raw_insert) { // NOSONAR
+            std::cerr << "[Insert] ec: " << ec.message() << ", bytes: " << raw_insert.size() << "\n";
+            if (ec) return;
+
+            std::cerr << "[RAW_INSERT] ";
+            for (auto b : raw_insert) {
+                std::cerr << std::hex << std::setw(2) << std::setfill('0') << std::to_integer<int>(b) << " ";
+            }
+            std::cerr << std::dec << "\n"; // NOSONAR
+
+            try {
+                auto insert_result = response_full::from_buffer(raw_insert);
+
+                EXPECT_TRUE(insert_result.success);
+                EXPECT_EQ(insert_result.quota_remaining, 5);
+                EXPECT_EQ(insert_result.ttl_type, ttl_types::seconds);
+
+                svc->send_raw(request_query_builder(consumer, resource),
+                    [&](boost::system::error_code ec2, std::vector<std::byte> raw_query) {
+                        std::cerr << "[Query] ec: " << ec2.message() << ", bytes: " << raw_query.size() << "\n";
+                        if (ec2) return;
+
+                        try { // NOSONAR
+                            auto query_result = response_full::from_buffer(raw_query);
+                            EXPECT_TRUE(query_result.success);
+                            EXPECT_EQ(query_result.quota_remaining, 5);
+                            EXPECT_EQ(query_result.ttl_type, ttl_types::seconds);
+                            finished = true;
+                        } catch (const std::exception& ex) { // NOSONAR
+                            std::cerr << "[Query parse error] " << ex.what() << "\n";
+                        }
+                    });
+
+            } catch (const std::exception& ex) { // NOSONAR
+                std::cerr << "[Insert parse error] " << ex.what() << "\n";
+            }
+        });
     io.run();
+    ASSERT_TRUE(finished);
 }
 
 TEST_F(ServiceTestFixture, ConsumeViaInsert) {
-    io.restart();
-    co_spawn(io, [this]() -> awaitable<void> {
-        const std::string consumer = "user:consume-insert";
-        const std::string resource = "/api/consume-insert";
+    const std::string consumer = "user:consume-insert";
+    const std::string resource = "/api/consume-insert";
 
-        co_await svc->send<response_full>(request_insert_builder(2, 0, ttl_types::seconds, 5, consumer, resource));
+    int step = 0;
+    bool finished = false;
 
-        for (int i = 0; i < 2; ++i) {
-            auto insert_consume = request_insert_builder(0, 1, ttl_types::seconds, 5, consumer, resource);
-            auto response = co_await svc->send<response_full>(insert_consume);
-            EXPECT_TRUE(response.success);
-            EXPECT_EQ(response.quota_remaining, 1 - i);
-        }
+    auto do_query = [&]() {
+        svc->send<response_full>(request_query_builder(consumer, resource),
+            [&](boost::system::error_code ec, response_full query_result) {
+                ASSERT_FALSE(ec);
+                EXPECT_TRUE(query_result.quota_remaining <= 0);
+                finished = true;
+            });
+    };
 
-        const auto query = request_query_builder(consumer, resource);
-        const auto query_result = co_await svc->send<response_full>(query);
-        EXPECT_TRUE(query_result.quota_remaining <= 0);
-        co_return;
-    }, detached);
+    auto consume = [&](int i) {
+        auto insert_consume = request_insert_builder(0, 1, ttl_types::seconds, 5, consumer, resource);
+        svc->send<response_full>(insert_consume,
+            [&, i](boost::system::error_code ec, response_full response) {
+                ASSERT_FALSE(ec);
+                EXPECT_TRUE(response.success);
+                EXPECT_EQ(response.quota_remaining, 1 - i);
+                if (i == 1) do_query();
+            });
+    };
+
+    svc->send<response_full>(request_insert_builder(2, 0, ttl_types::seconds, 5, consumer, resource),
+        [&](boost::system::error_code ec, response_full) {
+            ASSERT_FALSE(ec);
+            consume(0);
+            consume(1);
+        });
+
     io.run();
+    ASSERT_TRUE(finished);
 }
 
 TEST_F(ServiceTestFixture, UpdateDecreaseQuota) {
-    io.restart();
-    co_spawn(io, [this]() -> awaitable<void> {
-        const std::string consumer = "user:update";
-        const std::string resource = "/api/update";
+    const std::string consumer = "user:update";
+    const std::string resource = "/api/update";
+    bool finished = false;
+    int updates = 0;
 
-        co_await svc->send<response_full>(request_insert_builder(2, 0, ttl_types::seconds, 5, consumer, resource));
+    auto do_query = [&]() {
+        svc->send<response_full>(request_query_builder(consumer, resource),
+            [&](boost::system::error_code ec, response_full result) {
+                ASSERT_FALSE(ec);
+                EXPECT_EQ(result.quota_remaining, 0);
+                finished = true;
+            });
+    };
 
-        for (int i = 0; i < 3; ++i) {
-            auto update = request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer, resource);
-            auto update_result = co_await svc->send<response_simple>(update);
-            EXPECT_TRUE(update_result.success);
-        }
+    auto do_update = [&]() {
+        auto update = request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer, resource);
+        svc->send<response_simple>(update,
+            [&](boost::system::error_code ec, response_simple update_result) {
+                ASSERT_FALSE(ec);
+                EXPECT_TRUE(update_result.success);
+                if (++updates == 3) do_query();
+            });
+    };
 
-        const auto query = request_query_builder(consumer, resource);
-        const auto query_result = co_await svc->send<response_full>(query);
-        EXPECT_EQ(query_result.quota_remaining, 0);
-        co_return;
-    }, detached);
+    svc->send<response_full>(request_insert_builder(2, 0, ttl_types::seconds, 5, consumer, resource),
+        [&](boost::system::error_code ec, response_full) {
+            ASSERT_FALSE(ec);
+            do_update();
+            do_update();
+            do_update();
+        });
+
     io.run();
+    ASSERT_TRUE(finished);
 }
 
 TEST_F(ServiceTestFixture, PurgeThenQuery) {
-    io.restart();
-    co_spawn(io, [this]() -> awaitable<void> {
-        const std::string consumer = "user:purge";
-        const std::string resource = "/api/purge";
+    const std::string consumer = "user:purge";
+    const std::string resource = "/api/purge";
+    bool finished = false;
 
-        co_await svc->send<response_full>(request_insert_builder(1, 0, ttl_types::seconds, 5, consumer, resource));
+    svc->send<response_full>(request_insert_builder(1, 0, ttl_types::seconds, 5, consumer, resource),
+        [&](boost::system::error_code ec, response_full) {
+            ASSERT_FALSE(ec);
+            svc->send<response_simple>(request_purge_builder(consumer, resource),
+                [&](boost::system::error_code ec2, response_simple purge_response) {
+                    ASSERT_FALSE(ec2);
+                    EXPECT_TRUE(purge_response.success);
 
-        const auto purge = request_purge_builder(consumer, resource);
-        auto purge_response = co_await svc->send<response_simple>(purge);
-        EXPECT_TRUE(purge_response.success);
+                    svc->send<response_full>(request_query_builder(consumer, resource),
+                        [&](boost::system::error_code ec3, response_full query_result) {
+                            ASSERT_FALSE(ec3);
+                            EXPECT_FALSE(query_result.success);
+                            finished = true;
+                        });
+                });
+        });
 
-        const auto query = request_query_builder(consumer, resource);
-        const auto query_result = co_await svc->send<response_full>(query);
-        EXPECT_FALSE(query_result.success);
-
-        co_return;
-    }, detached);
     io.run();
+    ASSERT_TRUE(finished);
 }
 
 TEST_F(ServiceTestFixture, IsReadyReturnsTrueWhenAllConnectionsAreOpen) {
-    io.restart();
-    co_spawn(io, [this]() -> awaitable<void> {
-        co_await svc->connect();
-        EXPECT_TRUE(svc->is_ready());
-        co_return;
-    }, detached);
-    io.run();
+    EXPECT_TRUE(svc->is_ready());
 }

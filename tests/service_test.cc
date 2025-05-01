@@ -29,7 +29,7 @@ using namespace throttr;
 using namespace boost::asio;
 
 class ServiceTestFixture : public ::testing::Test {
-protected:
+public:
     io_context io;
     std::unique_ptr<service> svc;
 

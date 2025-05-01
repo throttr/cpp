@@ -25,7 +25,7 @@ using namespace throttr;
 using namespace boost::asio;
 
 class ServiceRawErrorTest : public ::testing::Test {
-protected:
+public:
     io_context io;
     std::unique_ptr<service> svc;
 
@@ -44,14 +44,12 @@ TEST_F(ServiceRawErrorTest, ThrowsWhenNoConnectionsAvailable) {
 
     bool threw_expected = false;
 
-    co_spawn(io, [&]() -> awaitable<void> {
-        std::vector<std::byte> dummy_buffer(1, std::byte{0x01});
+    co_spawn(io, [this, &threw_expected]() -> awaitable<void> {
+        const std::vector dummy_buffer(1, std::byte{0x01});
         try {
             co_await svc->send_raw(dummy_buffer);
         } catch (const service_error& e) {
             threw_expected = std::string(e.what()) == "no available connections";
-        } catch (...) {
-            threw_expected = false;
         }
         co_return;
     }, detached);

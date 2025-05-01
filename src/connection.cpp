@@ -22,7 +22,7 @@
 #include <array>
 
 namespace throttr {
-    connection::connection(boost::asio::any_io_executor executor, std::string host, const uint16_t port)
+    connection::connection(const boost::asio::any_io_executor &executor, std::string host, const uint16_t port)
         : strand_(make_strand(executor)),
           resolver_(strand_),
           socket_(strand_),
@@ -38,7 +38,7 @@ namespace throttr {
         return socket_.is_open();
     }
 
-    boost::asio::awaitable<std::vector<std::byte>> connection::send(const std::vector<std::byte>& buffer) {
+    boost::asio::awaitable<std::vector<std::byte>> connection::send(std::vector<std::byte> buffer) {
         co_await async_write(socket_, boost::asio::buffer(buffer), boost::asio::use_awaitable);
 
         std::array<std::byte, 18> recv_buf{};

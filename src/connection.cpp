@@ -32,14 +32,14 @@ namespace throttr {
 
     void connection::connect(std::function<void(boost::system::error_code)> handler) {
         resolver_.async_resolve(host_, std::to_string(port_),
-                                [this, self = shared_from_this(), handler = std::move(handler)](
-                            boost::system::error_code ec, auto endpoints) mutable {
-                                    if (ec) return handler(ec);
+                                [this, self = shared_from_this(), scope_handler = std::move(handler)](
+                            const boost::system::error_code &ec, const auto& endpoints) mutable {
+                                    if (ec) return scope_handler(ec);
 
                                     boost::asio::async_connect(socket_, endpoints,
-                                                               [self, handler = std::move(handler)](
-                                                           boost::system::error_code ec, auto) mutable {
-                                                                   handler(ec);
+                                                               [self, final_handler = std::move(scope_handler)](
+                                                           const boost::system::error_code &connect_ec, auto) mutable {
+                                                                   final_handler(connect_ec);
                                                                });
                                 });
     }
@@ -50,7 +50,7 @@ namespace throttr {
 
     void connection::send(std::vector<std::byte> buffer,
                           std::function<void(boost::system::error_code, std::vector<std::byte>)> handler) {
-        auto self = shared_from_this(); // <== IMPORTANTE: preservar vivo antes de la lambda
+        auto self = shared_from_this();
         post(strand_, [self, buf = std::move(buffer), handler = std::move(handler)]() mutable {
             self->queue_.emplace_back(write_operation{std::move(buf), std::move(handler)});
             if (!self->writing_) {

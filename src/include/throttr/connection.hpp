@@ -22,8 +22,12 @@
 #include <vector>
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
+#include <boost/asio/experimental/channel.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <mutex>
+#include <deque>
+#include <atomic>
 
 namespace throttr {
     /**
@@ -53,6 +57,13 @@ namespace throttr {
          * @return awaitable<vector<byte>>
          */
         boost::asio::awaitable<std::vector<std::byte>> send(std::vector<std::byte> buffer);
+
+        /**
+         * Do write
+         *
+         * @return
+         */
+        boost::asio::awaitable<void> do_write();
 
         /**
          * Is open
@@ -86,6 +97,27 @@ namespace throttr {
          * Port
          */
         uint16_t port_;
+
+        /**
+         * Mutex
+         */
+        std::mutex mutex_;
+
+        /**
+         * Queue
+         */
+        std::deque<std::vector<std::byte>> write_queue_;
+
+        /**
+         * Writing
+         */
+        bool writing_ = false;
+
+
+        /**
+         * Channel
+         */
+        std::deque<std::shared_ptr<boost::asio::experimental::channel<void(boost::system::error_code, std::vector<std::byte>)>>> pending_responses_;
     };
 
 } // namespace throttr

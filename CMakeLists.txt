@@ -11,6 +11,7 @@ set(BUILD_SHARED_LIBS OFF)
 
 option(BUILD_SDK_TESTS "Build SDK tests cases" ON)
 option(BUILD_PROTOCOL_TESTS "Build PROTOCOL tests cases" OFF)
+option(BUILD_SDK_BENCHMARK "Build SDK BENCHMARK" ON)
 
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
@@ -52,6 +53,11 @@ target_link_libraries(throttr-sdk
 
 target_compile_options(throttr-sdk PRIVATE -static -static-libgcc -static-libstdc++)
 target_link_options(throttr-sdk PRIVATE -static -static-libgcc -static-libstdc++)
+
+if (BUILD_SDK_BENCHMARK)
+    add_executable(benchmark benchmark.cpp)
+    target_link_libraries(benchmark throttr-sdk ${Boost_LIBRARIES})
+endif()
 
 if (BUILD_SDK_TESTS)
     include(FetchContent)

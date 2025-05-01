@@ -42,7 +42,7 @@ TEST_F(ServiceRawErrorTest, ThrowsWhenNoConnectionsAvailable) {
 
     const std::vector dummy_buffer(1, std::byte{0x01});
 
-    svc->send_raw(dummy_buffer, [&](boost::system::error_code ec, std::vector<std::byte>) {
+    svc->send_raw(dummy_buffer, [&](boost::system::error_code ec, std::vector<std::byte>) { // NOSONAR
         if (ec == boost::system::errc::not_connected) {
             error_triggered = true;
         }

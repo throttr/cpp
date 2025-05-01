@@ -36,7 +36,7 @@ public:
         svc = std::make_unique<service>(io.get_executor(), cfg);
 
         bool ready = false;
-        svc->connect([&](boost::system::error_code ec) {
+        svc->connect([&](boost::system::error_code ec) { // NOSONAR
             EXPECT_FALSE(ec);
             ready = true;
         });
@@ -64,7 +64,7 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
     auto insert = request_insert_builder(5, 0, ttl_types::seconds, 5, consumer, resource);
 
     svc->send_raw(insert,
-        [&](boost::system::error_code ec, std::vector<std::byte> raw_insert) {
+        [&](boost::system::error_code ec, std::vector<std::byte> raw_insert) { // NOSONAR
             std::cerr << "[Insert] ec: " << ec.message() << ", bytes: " << raw_insert.size() << "\n";
             if (ec) return;
 
@@ -72,7 +72,7 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
             for (auto b : raw_insert) {
                 std::cerr << std::hex << std::setw(2) << std::setfill('0') << std::to_integer<int>(b) << " ";
             }
-            std::cerr << std::dec << "\n";
+            std::cerr << std::dec << "\n"; // NOSONAR
 
             try {
                 auto insert_result = response_full::from_buffer(raw_insert);
@@ -86,18 +86,18 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
                         std::cerr << "[Query] ec: " << ec2.message() << ", bytes: " << raw_query.size() << "\n";
                         if (ec2) return;
 
-                        try {
+                        try { // NOSONAR
                             auto query_result = response_full::from_buffer(raw_query);
                             EXPECT_TRUE(query_result.success);
                             EXPECT_EQ(query_result.quota_remaining, 5);
                             EXPECT_EQ(query_result.ttl_type, ttl_types::seconds);
                             finished = true;
-                        } catch (const std::exception& ex) {
+                        } catch (const std::exception& ex) { // NOSONAR
                             std::cerr << "[Query parse error] " << ex.what() << "\n";
                         }
                     });
 
-            } catch (const std::exception& ex) {
+            } catch (const std::exception& ex) { // NOSONAR
                 std::cerr << "[Insert parse error] " << ex.what() << "\n";
             }
         });

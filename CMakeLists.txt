@@ -18,6 +18,7 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g --coverage -fprofile-arcs -ftest-coverage")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
+set(CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
 
 find_package(Boost 1.87.0 REQUIRED COMPONENTS

@@ -23,9 +23,9 @@
 #include <atomic>
 #include <string>
 #include <memory>
+#include <functional>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/awaitable.hpp>
 
 namespace throttr {
     /**
@@ -58,9 +58,9 @@ namespace throttr {
         /**
          * Connect
          *
-         * @return awaitable<void>
+         * @param handler completion handler
          */
-        boost::asio::awaitable<void> connect();
+        void connect(std::function<void(boost::system::error_code)> handler);
 
         /**
          * Is ready
@@ -69,23 +69,25 @@ namespace throttr {
          */
         [[nodiscard]] bool is_ready() const;
 
-
         /**
-         * Send
+         * Send raw
          *
          * @param buffer
-         * @return awaitable<response>
+         * @param handler
+         */
+        void send_raw(std::vector<std::byte> buffer,
+                      std::function<void(boost::system::error_code, std::vector<std::byte>)> handler);
+
+        /**
+         * Send typed
+         *
+         * @tparam T
+         * @param buffer
+         * @param handler
          */
         template<typename T>
-        [[nodiscard]] boost::asio::awaitable<T> send(std::vector<std::byte> buffer);
-
-        /**
-         * Send
-         *
-         * @param buffer
-         * @return awaitable<response>
-         */
-        [[nodiscard]] boost::asio::awaitable<std::vector<std::byte>> send_raw(std::vector<std::byte> buffer);
+        void send(std::vector<std::byte> buffer,
+                  std::function<void(boost::system::error_code, T)> handler);
 
         /**
          * Get connection
@@ -93,6 +95,7 @@ namespace throttr {
          * @return
          */
         std::shared_ptr<connection> get_connection();
+
     private:
         /**
          * Executor
@@ -116,31 +119,33 @@ namespace throttr {
     };
 
     /**
-     * Send
-     *
-     * @tparam T
-     * @param buffer
-     * @return
-     */
-    template<typename T>
-    boost::asio::awaitable<T> service::send(const std::vector<std::byte> buffer) {
-        auto raw = co_await send_raw(buffer);
-        co_return T::from_buffer(raw);
-    }
-
-    /**
      * Send implements T as response_simple
      *
-     * @return awaitable<response_simple>
+     * @return void
      */
-    template boost::asio::awaitable<response_simple> service::send<response_simple>(std::vector<std::byte>);
+    template<>
+    inline void service::send<response_simple>(std::vector<std::byte> buffer,
+                                               std::function<void(boost::system::error_code, response_simple)> handler) {
+        send_raw(std::move(buffer), [handler = std::move(handler)](auto ec, auto data) mutable {
+            if (ec) return handler(ec, {});
+            handler({}, response_simple::from_buffer(data));
+        });
+    }
 
     /**
      * Send implements T as response_full
      *
-     * @return awaitable<response_full>
+     * @return void
      */
-    template boost::asio::awaitable<response_full> service::send<response_full>(std::vector<std::byte>);
+    template<>
+    inline void service::send<response_full>(std::vector<std::byte> buffer,
+                                             std::function<void(boost::system::error_code, response_full)> handler) {
+        send_raw(std::move(buffer), [handler = std::move(handler)](auto ec, auto data) mutable {
+            if (ec) return handler(ec, {});
+            handler({}, response_full::from_buffer(data));
+        });
+    }
+
 } // namespace throttr
 
 #endif // THROTTR_SERVICE_HPP

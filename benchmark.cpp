@@ -36,7 +36,7 @@ int main() {
     service svc(io.get_executor(), cfg);
 
     bool ready = false;
-    svc.connect([&](boost::system::error_code ec) {
+    svc.connect([&](boost::system::error_code ec) { // NOSONAR
         if (ec) {
             std::cerr << "Connection error: " << ec.message() << "\n";
             return;
@@ -54,6 +54,7 @@ int main() {
     for (int i = 0; i < total; ++i) {
         post(io, [&, buffer]() {
             svc.send<response_full>(buffer, [&](boost::system::error_code ec, response_full res) {
+                // This scope doesn't requires operations
             });
         });
     }

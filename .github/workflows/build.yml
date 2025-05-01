@@ -21,7 +21,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_SDK_TESTS=ON
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_SDK_TESTS=ON -DBUILD_SDK_BENCHMARK=ON
           make -j4
           
           for i in {1..10}; do
@@ -32,7 +32,11 @@ jobs:
           
           nc -z throttr 9000 || (echo "❌ throttr isn't running on port 9000" && exit 1)
           
+          ./benchmark
+          
           ctest  --output-on-failure --verbose
+          
+          
           cd ..
           gcovr --filter='src/' --print-summary --sort-percentage
 

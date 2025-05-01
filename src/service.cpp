@@ -42,7 +42,12 @@ namespace throttr {
 
     std::shared_ptr<connection> service::get_connection() {
         const auto idx = next_connection_index_.fetch_add(1) % connections_.size();
-        return connections_[idx];
+
+        if (idx < connections_.size()) {
+            return connections_[idx];
+        } else {
+            return nullptr;
+        }
     }
 
     boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> buffer) {

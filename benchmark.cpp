@@ -29,7 +29,7 @@ public:
         const std::string consumer_id = "consumer:insert-only";
         const std::string resource_id = "/api/insert-only";
 
-        constexpr int total = 10000;
+        constexpr int total = 1000;
 
         int remaining = total;
 
@@ -45,7 +45,7 @@ public:
         const std::string consumer_id = "consumer:insert-update";
         const std::string resource_id = "/api/insert-update";
 
-        constexpr int total = 10000;
+        constexpr int total = 1000;
 
         const auto insert_consume = request_insert_builder(total, 1, ttl_types::seconds, 10, consumer_id, resource_id);
         const auto response = co_await service_.send<response_full>(insert_consume);
@@ -57,7 +57,8 @@ public:
         const auto ex = co_await this_coro::executor;
 
         while (remaining > 0) {
-            co_await service_.send<response_simple>( request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer_id, resource_id));
+            co_await service_.send<response_simple>(
+                request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer_id, resource_id));
             --remaining;
         }
 
@@ -65,17 +66,20 @@ public:
     }
 
     awaitable<void> run_benchmark() const {
-        std::cout << std::endl << "Benchmark #1 - Quota: 10000, Usage: 1, TTL Type: Seconds - Using only Insert" << std::endl;
+        std::cout << std::endl << "Benchmark #1 - Quota: 1000, Usage: 1, TTL Type: Seconds - Using only Insert" <<
+                std::endl;
         const auto start_insert_only = std::chrono::high_resolution_clock::now();
         co_await consume_insert_only();
         const auto end_insert_only = std::chrono::high_resolution_clock::now();
         std::cout << "Benchmark #1 completed. " << std::endl;
-        const auto insert_only_elapsed_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(end_insert_only - start_insert_only).count();
-        const auto insert_only_elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end_insert_only - start_insert_only).count();
+        const auto insert_only_elapsed_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            end_insert_only - start_insert_only).count();
+        const auto insert_only_elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(
+            end_insert_only - start_insert_only).count();
         std::cout << "Time: " << insert_only_elapsed_nanoseconds << " nanoseconds." << std::endl;
         std::cout << "Time: " << insert_only_elapsed_milliseconds << " milliseconds." << std::endl << std::endl;
 
-        std::cout << "Benchmark #2 - Quota: 10000, Usage: 1, TTL Type: Seconds - Using Insert and Updates" << std::endl;
+        std::cout << "Benchmark #2 - Quota: 1000, Usage: 1, TTL Type: Seconds - Using Insert and Updates" << std::endl;
         const auto start_insert_and_update = std::chrono::high_resolution_clock::now();
         co_await consume_insert_and_update();
         const auto end_insert_and_update = std::chrono::high_resolution_clock::now();
@@ -91,11 +95,12 @@ public:
 private:
     io_context &io_context_;
     service &service_;
+    std::atomic<int> pending_ = 10000;
 };
 
 int main() {
     io_context io_context;
-    const service_config config = {"127.0.0.1", 9000, 20};
+    const service_config config = {"127.0.0.1", 9000, 10};
     service _service(io_context.get_executor(), config);
 
     std::atomic _connected = false;

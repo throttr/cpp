@@ -126,9 +126,9 @@ namespace throttr {
     template<>
     inline void service::send<response_simple>(std::vector<std::byte> buffer,
                                                std::function<void(boost::system::error_code, response_simple)> handler) {
-        send_raw(std::move(buffer), [handler = std::move(handler)](auto ec, auto data) mutable {
-            if (ec) return handler(ec, {});
-            handler({}, response_simple::from_buffer(data));
+        send_raw(std::move(buffer), [final_handler = std::move(handler)](auto ec, const auto& data) mutable {
+            if (ec) return final_handler(ec, {});
+            final_handler({}, response_simple::from_buffer(data));
         });
     }
 
@@ -140,9 +140,9 @@ namespace throttr {
     template<>
     inline void service::send<response_full>(std::vector<std::byte> buffer,
                                              std::function<void(boost::system::error_code, response_full)> handler) {
-        send_raw(std::move(buffer), [handler = std::move(handler)](auto ec, auto data) mutable {
-            if (ec) return handler(ec, {});
-            handler({}, response_full::from_buffer(data));
+        send_raw(std::move(buffer), [final_handler = std::move(handler)](auto ec, auto data) mutable {
+            if (ec) return final_handler(ec, {});
+            final_handler({}, response_full::from_buffer(data));
         });
     }
 

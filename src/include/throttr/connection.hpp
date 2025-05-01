@@ -38,7 +38,7 @@ namespace throttr {
          * @param host
          * @param port
          */
-        connection(boost::asio::any_io_executor executor, std::string host, uint16_t port);
+        connection(const boost::asio::any_io_executor &executor, std::string host, uint16_t port);
 
         /**
          * Connect
@@ -52,7 +52,7 @@ namespace throttr {
          * @param buffer
          * @return awaitable<vector<byte>>
          */
-        boost::asio::awaitable<std::vector<std::byte>> send(const std::vector<std::byte>& buffer);
+        boost::asio::awaitable<std::vector<std::byte>> send(std::vector<std::byte> buffer);
 
         /**
          * Is open

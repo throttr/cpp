@@ -76,6 +76,12 @@ namespace throttr {
         void do_write();
 
         /**
+         * Handle
+         * @param op
+         */
+        void handle_write(const std::shared_ptr<write_operation>& op);
+
+        /**
          * Strand
          */
         boost::asio::strand<boost::asio::any_io_executor> strand_;

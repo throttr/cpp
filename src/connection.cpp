@@ -51,8 +51,8 @@ namespace throttr {
     void connection::send(std::vector<std::byte> buffer,
                           std::function<void(boost::system::error_code, std::vector<std::byte>)> handler) {
         auto self = shared_from_this();
-        post(strand_, [self, buf = std::move(buffer), handler = std::move(handler)]() mutable {
-            self->queue_.emplace_back(write_operation{std::move(buf), std::move(handler)});
+        post(strand_, [self, buf = std::move(buffer), final_handler = std::move(handler)]() mutable {
+            self->queue_.emplace_back(std::move(buf), std::move(final_handler));
             if (!self->writing_) {
                 self->writing_ = true;
                 self->do_write();
@@ -71,37 +71,37 @@ namespace throttr {
 
         auto self = shared_from_this();
         boost::asio::async_write(socket_, boost::asio::buffer(op_ptr->buffer_),
-                                 boost::asio::bind_executor(strand_,
-                                                            [self, op_ptr](
-                                                        boost::system::error_code ec,
-                                                        std::size_t /*bytes_transferred*/) {
-                                                                if (ec) {
-                                                                    op_ptr->handler(ec, {});
-                                                                    self->do_write();
-                                                                    return;
-                                                                }
+            boost::asio::bind_executor(strand_,
+                [self, op_ptr](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
+                    if (ec) {
+                        op_ptr->handler(ec, {});
+                        self->do_write();
+                        return;
+                    }
+                    self->handle_write(op_ptr);
+                }));
+    }
 
-                                                                std::size_t expected = 1;
-                                                                const auto type = std::to_integer<uint8_t>(
-                                                                    op_ptr->buffer_[0]);
-                                                                if (type == 0x01 || type == 0x02) expected = 18;
+    void connection::handle_write(const std::shared_ptr<write_operation>& op) {
+        std::size_t expected = 1;
+        const auto type = std::to_integer<uint8_t>(op->buffer_[0]);
+        if (type == 0x01 || type == 0x02) expected = 18;
 
-                                                                auto recv_buf = std::make_shared<std::array<std::byte, 18>>();
-                                                                boost::asio::async_read(
-                                                                    self->socket_, boost::asio::buffer(*recv_buf),
-                                                                    boost::asio::transfer_exactly(expected),
-                                                                    boost::asio::bind_executor(self->strand_,
-                                                                        [self, op_ptr, recv_buf, expected](boost::system::error_code ec2, std::size_t n) mutable {
+        auto recv_buf = std::make_shared<std::array<std::byte, 18>>();
+        auto self = shared_from_this();
 
-                                                                            if (ec2) {
-                                                                                op_ptr->handler(ec2, {});
-                                                                            } else {
-                                                                                std::vector<std::byte> response(recv_buf->begin(), recv_buf->begin() + n);
-                                                                                op_ptr->handler({}, std::move(response));
-                                                                            }
-
-                                                                            self->do_write();
-                                                                        }));
-                                                            }));
+        boost::asio::async_read(
+            socket_, boost::asio::buffer(*recv_buf),
+            boost::asio::transfer_exactly(expected),
+            boost::asio::bind_executor(strand_,
+                [self, op, recv_buf, expected](boost::system::error_code ec, std::size_t n) mutable {
+                    if (ec) {
+                        op->handler(ec, {});
+                    } else {
+                        std::vector<std::byte> response(recv_buf->begin(), recv_buf->begin() + n);
+                        op->handler({}, std::move(response));
+                    }
+                    self->do_write();
+                }));
     }
 }

@@ -24,10 +24,8 @@ TEST(ResponseSimpleTest, ThrowsWhenBufferSizeIsInvalid) {
     try {
         throttr::response_simple::from_buffer(buffer);
         FAIL() << "Expected std::runtime_error due to invalid buffer size";
-    } catch (const std::runtime_error& e) {
+    } catch (const throttr::response_error& e) {
         EXPECT_STREQ(e.what(), "response_simple: invalid buffer size");
-    } catch (...) {
-        FAIL() << "Expected std::runtime_error, but got a different exception";
     }
 }
 
@@ -37,9 +35,7 @@ TEST(ResponseFullTest, ThrowsWhenBufferSizeIsInvalid) {
     try {
         throttr::response_full::from_buffer(buffer);
         FAIL() << "Expected std::runtime_error due to invalid buffer size";
-    } catch (const std::runtime_error& e) {
+    } catch (const throttr::response_error& e) {
         EXPECT_STREQ(e.what(), "response_full: invalid buffer size");
-    } catch (...) {
-        FAIL() << "Expected std::runtime_error, but got a different exception";
     }
 }

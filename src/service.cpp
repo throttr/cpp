@@ -46,7 +46,7 @@ namespace throttr {
         return connections_[idx];
     }
 
-    boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> &buffer) {
+    boost::asio::awaitable<std::vector<std::byte>> service::send_raw(const std::vector<std::byte> buffer) {
         if (connections_.empty()) {
             throw service_error("no available connections");
         }

@@ -7,8 +7,7 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/asio/awaitable.hpp>
-#include <boost/asio/executor_work_guard.hpp>
-#include <boost/asio/strand.hpp>
+#include <boost/asio.hpp>
 #include <throttr/service.hpp>
 #include <throttr/protocol.hpp>
 #include <memory>
@@ -16,80 +15,87 @@
 using namespace boost::asio;
 using namespace throttr;
 
+using boost::asio::awaitable;
+using boost::asio::use_awaitable;
+
+
 class Benchmark {
 public:
-    Benchmark(io_context& io_context, service& service)
-        : io_context_(io_context), service_(service) {}
+    Benchmark(io_context &io_context, service &service)
+        : io_context_(io_context), service_(service) {
+    }
 
-    // Función para consumir cuota
-    boost::asio::awaitable<void> consume_quota() {
-        const std::string consumer_id = "consumer:benchmark";
-        const std::string resource_id = "/api/benchmark";
+    awaitable<void> consume_insert_only() const {
+        const std::string consumer_id = "consumer:insert-only";
+        const std::string resource_id = "/api/insert-only";
 
-        while (quota_remaining_ > 0) {
-            std::puts("Benchmark: Consumiendo cuota...");
-            auto request = request_insert_builder(0, 1, ttl_types::seconds, 5, consumer_id, resource_id);
-            auto response = co_await service_.send<throttr::response_full>(request);
+        constexpr int total = 10000;
 
-            if (response.success) {
-                std::puts("Benchmark: Consumo exitoso");
-                quota_remaining_--;
-            } else {
-                std::puts("Benchmark: Error al consumir cuota");
-            }
+        int remaining = total;
+
+        while (remaining > 0) {
+            co_await service_.send<response_full>(request_insert_builder(total, 1, ttl_types::seconds, 10, consumer_id, resource_id));
+            --remaining;
         }
 
-        std::puts("Benchmark: Consumo de cuota completado");
         co_return;
     }
 
-    // Ejecuta el benchmark con múltiples hilos
-    void run_benchmark(int num_threads) {
-        std::puts("Benchmark: Iniciando ejecución de benchmark");
+    awaitable<void> consume_insert_and_update() const {
+        const std::string consumer_id = "consumer:insert-update";
+        const std::string resource_id = "/api/insert-update";
 
-        boost::asio::io_context::executor_type executor = io_context_.get_executor();
+        constexpr int total = 10000;
 
-        // Medir el tiempo que toma
-        auto start = std::chrono::high_resolution_clock::now();
-
-        // Lanza las corrutinas para los hilos
-        std::puts("Benchmark: Lanzando hilos...");
-        std::vector<std::shared_ptr<std::function<boost::asio::awaitable<void>()>>> tasks;
-
-        for (int i = 0; i < num_threads; ++i) {
-            // Crear una lambda y almacenarla en un shared_ptr de function
-            tasks.push_back(std::make_shared<std::function<boost::asio::awaitable<void>()>>([this]() -> awaitable<void> {
-                std::puts("Benchmark: Hilo iniciado");
-                co_await consume_quota();
-                std::puts("Benchmark: Hilo finalizado");
-                co_return;
-            }));
+        const auto insert_consume = request_insert_builder(total, 1, ttl_types::seconds, 10, consumer_id, resource_id);
+        const auto response = co_await service_.send<response_full>(insert_consume);
+        if (!response.success) {
+            co_return;
         }
 
-        // Ejecutamos todas las corrutinas de forma sincronizada
-        for (auto& task : tasks) {
-            co_spawn(executor, *task, detached);
+        int remaining = total - 1;
+        const auto ex = co_await this_coro::executor;
+
+        while (remaining > 0) {
+            co_await service_.send<response_simple>( request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer_id, resource_id));
+            --remaining;
         }
 
-        // Ejecutamos el io_context para que las corrutinas se ejecuten
-        std::puts("Benchmark: Ejecutando io_context...");
-        io_context_.run();
+        co_return;
+    }
 
-        // Medimos el tiempo final
-        auto end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end - start;
-        printf("Benchmark: Tiempo para consumir 1000 cuota con %d hilos: %.2f segundos.\n", num_threads, elapsed.count());
+    awaitable<void> run_benchmark() const {
+        std::cout << std::endl << "Benchmark #1 - Quota: 10000, Usage: 1, TTL Type: Seconds - Using only Insert" << std::endl;
+        const auto start_insert_only = std::chrono::high_resolution_clock::now();
+        co_await consume_insert_only();
+        const auto end_insert_only = std::chrono::high_resolution_clock::now();
+        std::cout << "Benchmark #1 completed. " << std::endl;
+        const auto insert_only_elapsed_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(end_insert_only - start_insert_only).count();
+        const auto insert_only_elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end_insert_only - start_insert_only).count();
+        std::cout << "Time: " << insert_only_elapsed_nanoseconds << " nanoseconds." << std::endl;
+        std::cout << "Time: " << insert_only_elapsed_milliseconds << " milliseconds." << std::endl << std::endl;
+
+        std::cout << "Benchmark #2 - Quota: 10000, Usage: 1, TTL Type: Seconds - Using Insert and Updates" << std::endl;
+        const auto start_insert_and_update = std::chrono::high_resolution_clock::now();
+        co_await consume_insert_and_update();
+        const auto end_insert_and_update = std::chrono::high_resolution_clock::now();
+        std::cout << "Benchmark #2 completed. " << std::endl;
+        const auto insert_and_update_elapsed_nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(end_insert_and_update - start_insert_and_update).count();
+        const auto insert_and_update_elapsed_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(end_insert_and_update - start_insert_and_update).count();
+        std::cout << "Time: " << insert_and_update_elapsed_nanoseconds << " nanoseconds." << std::endl;
+        std::cout << "Time: " << insert_and_update_elapsed_milliseconds << " milliseconds." << std::endl << std::endl;
+
+        co_return;
     }
 
 private:
-    io_context& io_context_;
-    service& service_;
-    std::atomic<int> quota_remaining_ = 1000;
+    io_context &io_context_;
+    service &service_;
 };
 
 int main() {
     io_context io_context;
-    const service_config config = {"127.0.0.1", 9000, 4};
+    const service_config config = {"127.0.0.1", 9000, 20};
     service _service(io_context.get_executor(), config);
 
     std::atomic _connected = false;
@@ -109,8 +115,8 @@ int main() {
         }
 
         std::puts("Service is connected. Starting benchmark...");
-        Benchmark benchmark(io_context, _service);
-               benchmark.run_benchmark(10);  // Número de hilos que quieres usar
+        const Benchmark benchmark(io_context, _service);
+        co_await benchmark.run_benchmark();
 
         co_return;
     }, detached);

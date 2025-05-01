@@ -30,6 +30,8 @@ jobs:
             sleep 1
           done
           
+          nc -z localhost 9000 || (echo "❌ throttr isn't running on port 9000" && exit 1)
+          
           ctest  --output-on-failure --verbose
           cd ..
           gcovr --filter='src/' --print-summary --sort-percentage

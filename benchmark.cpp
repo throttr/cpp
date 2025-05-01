@@ -109,7 +109,7 @@ private:
 
 int main() {
     io_context io_context;
-    const service_config config = {"127.0.0.1", 9000, 10};
+    const service_config config = {"throttr", 9000, 10};
     service _service(io_context.get_executor(), config);
 
     std::atomic _connected = false;

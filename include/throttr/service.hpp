@@ -78,6 +78,14 @@ namespace throttr {
          */
         template<typename T>
         [[nodiscard]] boost::asio::awaitable<T> send(const std::vector<std::byte> &buffer);
+
+        /**
+         * Send
+         *
+         * @param buffer
+         * @return awaitable<response>
+         */
+        [[nodiscard]] boost::asio::awaitable<std::vector<std::byte>> send_raw(const std::vector<std::byte> &buffer);
     private:
         /**
          * Executor
@@ -105,14 +113,6 @@ namespace throttr {
          * @return
          */
         std::shared_ptr<connection> get_connection();
-
-        /**
-         * Send
-         *
-         * @param buffer
-         * @return awaitable<response>
-         */
-        [[nodiscard]] boost::asio::awaitable<std::vector<std::byte>> send_raw(const std::vector<std::byte> &buffer);
     };
 
     /**

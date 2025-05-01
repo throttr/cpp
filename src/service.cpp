@@ -53,7 +53,7 @@ namespace throttr {
 
         const auto conn = get_connection();
         if (!conn || !conn->is_open()) {
-            throw service_error("picked connection is not open");
+            throw service_error("get connection is not open");
         }
 
         co_return co_await conn->send(buffer);

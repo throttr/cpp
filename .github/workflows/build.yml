@@ -25,12 +25,12 @@ jobs:
           make -j4
           
           for i in {1..10}; do
-            nc -z localhost 9000 && echo "✅ throttr running ... " && break
+            nc -z throttr 9000 && echo "✅ throttr running ... " && break
             echo "⏳ Try $i: waiting 1s..."
             sleep 1
           done
           
-          nc -z localhost 9000 || (echo "❌ throttr isn't running on port 9000" && exit 1)
+          nc -z throttr 9000 || (echo "❌ throttr isn't running on port 9000" && exit 1)
           
           ctest  --output-on-failure --verbose
           cd ..

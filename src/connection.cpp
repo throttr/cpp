@@ -66,19 +66,19 @@ namespace throttr {
             return;
         }
 
-        auto op_ptr = std::make_shared<write_operation>(std::move(queue_.front()));
+        auto op = std::make_shared<write_operation>(std::move(queue_.front()));
         queue_.pop_front();
 
         auto self = shared_from_this();
-        boost::asio::async_write(socket_, boost::asio::buffer(op_ptr->buffer_),
+        boost::asio::async_write(socket_, boost::asio::buffer(op->buffer_),
             boost::asio::bind_executor(strand_,
-                [self, op_ptr](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
+                [self, op](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
                     if (ec) {
-                        op_ptr->handler(ec, {});
+                        op->handler(ec, {});
                         self->do_write();
                         return;
                     }
-                    self->handle_write(op_ptr);
+                    self->handle_write(op);
                 }));
     }
 
@@ -86,18 +86,18 @@ namespace throttr {
         std::size_t expected = 1;
         if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x01 || type == 0x02) expected = 18;
 
-        auto recv_buf = std::make_shared<std::array<std::byte, 18>>();
+        auto buffer = std::make_shared<std::array<std::byte, 18>>();
         auto self = shared_from_this();
 
         boost::asio::async_read(
-            socket_, boost::asio::buffer(*recv_buf),
+            socket_, boost::asio::buffer(*buffer),
             boost::asio::transfer_exactly(expected),
             boost::asio::bind_executor(strand_,
-                [self, op, recv_buf, expected](boost::system::error_code ec, std::size_t n) mutable {
+                [self, op, buffer](boost::system::error_code ec, std::size_t n) mutable {
                     if (ec) {
                         op->handler(ec, {});
                     } else {
-                        std::vector<std::byte> response(recv_buf->begin(), recv_buf->begin() + n);
+                        std::vector<std::byte> response(buffer->begin(), buffer->begin() + n);
                         op->handler({}, std::move(response));
                     }
                     self->do_write();

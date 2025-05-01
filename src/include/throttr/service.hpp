@@ -86,6 +86,13 @@ namespace throttr {
          * @return awaitable<response>
          */
         [[nodiscard]] boost::asio::awaitable<std::vector<std::byte>> send_raw(std::vector<std::byte> buffer);
+
+        /**
+         * Get connection
+         *
+         * @return
+         */
+        std::shared_ptr<connection> get_connection();
     private:
         /**
          * Executor
@@ -106,13 +113,6 @@ namespace throttr {
          * Connections
          */
         std::vector<std::shared_ptr<connection>> connections_;
-
-        /**
-         * Get connection
-         *
-         * @return
-         */
-        std::shared_ptr<connection> get_connection();
     };
 
     /**

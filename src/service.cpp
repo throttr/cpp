@@ -36,8 +36,7 @@ namespace throttr {
 
     bool service::is_ready() const {
         return !connections_.empty() &&
-                   std::ranges::all_of(connections_,
-                                       [](const std::shared_ptr<connection>& c) { return c && c->is_open(); });
+                   std::ranges::all_of(connections_, [](const std::shared_ptr<connection>& c) { return c && c->is_open(); });
 
     }
 

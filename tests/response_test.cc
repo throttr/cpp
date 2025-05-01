@@ -29,6 +29,12 @@ TEST(ResponseSimpleTest, ThrowsWhenBufferSizeIsInvalid) {
     }
 }
 
+TEST(ResponseSimpleTest, FromBufferSucceeds) {
+    std::vector buffer(1, std::byte{0x01});
+    auto [success] = throttr::response_simple::from_buffer(buffer);
+    EXPECT_TRUE(success);
+}
+
 TEST(ResponseFullTest, ThrowsWhenBufferSizeIsInvalid) {
     const std::vector buffer(17, std::byte{0x01});
 
@@ -38,4 +44,22 @@ TEST(ResponseFullTest, ThrowsWhenBufferSizeIsInvalid) {
     } catch (const throttr::response_error& e) {
         EXPECT_STREQ(e.what(), "response_full: invalid buffer size");
     }
+}
+
+TEST(ResponseFullTest, FromBufferSucceeds) {
+    std::vector buffer(18, std::byte{0x01});
+
+    buffer[0] = std::byte{0x01};  // success = true
+    constexpr uint64_t quota_remaining = 100;
+    std::memcpy(&buffer[1], &quota_remaining, sizeof(uint64_t)); // quota_remaining = 100
+    buffer[9] = std::byte{0x01};  // ttl_type = milliseconds
+    constexpr uint64_t ttl_remaining = 1000;
+    std::memcpy(&buffer[10], &ttl_remaining, sizeof(int64_t)); // ttl_remaining = 1000
+
+    const auto resp = throttr::response_full::from_buffer(buffer);
+
+    EXPECT_TRUE(resp.success);
+    EXPECT_EQ(resp.quota_remaining, 100);
+    EXPECT_EQ(resp.ttl_type, throttr::ttl_types::milliseconds);
+    EXPECT_EQ(resp.ttl_remaining, 1000);
 }

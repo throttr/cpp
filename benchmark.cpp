@@ -16,9 +16,10 @@
 #include <throttr/service.hpp>
 #include <throttr/response_status.hpp>
 #include <throttr/response_query.hpp>
-#include <throttr/protocol.hpp>
+#include <throttr/protocol_wrapper.hpp>
 
 #include <boost/asio/io_context.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <iostream>
@@ -47,13 +48,13 @@ int main() {
     while (!ready) io.run_one();
     io.restart();
 
-    constexpr int total = 100'000;
+    constexpr int total = 100;
     const std::string key = "resource|consumer";
-    auto buffer = request_insert_builder(100000, ttl_types::seconds, 10, key);
+    auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);
     for (int i = 0; i < total; ++i) {
         post(io, [&, buffer]() {
             svc.send<response_query>(buffer, [&](boost::system::error_code ec, response_query res) {
-                // This scope doesn't requires operations
+                boost::ignore_unused(ec, res);
             });
         });
     }
@@ -64,9 +65,9 @@ int main() {
     std::puts("Ran ...");
     const auto end = std::chrono::steady_clock::now();
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    std::cout << "100.000 insert has been done in " << ms << " ms\n";
+    std::cout << "100 insert has been done in " << ms << " ms\n";
 
-    auto bytes_transferred = (buffer.size() + 18) * total; // payload + response
+    auto bytes_transferred = (buffer.size() + 1) * total; // payload + response
     double seconds = ms / 1000.0;
 
     std::cout << "Total transferred: " << bytes_transferred << " bytes\n";

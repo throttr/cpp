@@ -53,7 +53,7 @@ This SDK depends on Boost.Asio. Make sure Boost 1.87+ is available, with the fol
 ```c++
 #include <throttr/service.hpp>
 #include <throttr/response_full.hpp>
-#include <throttr/protocol.hpp>
+#include <throttr/protocol_wrapper.hpp>
 
 #include <boost/asio/io_context.hpp>
 #include <iostream>

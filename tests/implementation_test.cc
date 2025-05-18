@@ -23,9 +23,6 @@ public:
 
     TcpConnectionTest() : socket_(io_) {}
 
-    void SetUp() override {
-    }
-
     void TearDown() override {
         if (socket_.is_open()) {
             boost::system::error_code ec;

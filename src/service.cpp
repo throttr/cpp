@@ -26,23 +26,23 @@ namespace throttr {
         : executor_(std::move(ex)), config_(std::move(cfg)) {}
 
     void service::connect(std::function<void(boost::system::error_code)> handler) {
-        auto shared_handler = std::make_shared<std::function<void(boost::system::error_code)>>(std::move(handler));
-        auto pending = std::make_shared<std::atomic_size_t>(config_.max_connections_);
-        auto error_flag = std::make_shared<std::atomic_bool>(false);
+        auto _shared_handler = std::make_shared<std::function<void(boost::system::error_code)>>(std::move(handler));
+        auto _pending = std::make_shared<std::atomic_size_t>(config_.max_connections_);
+        auto _error_flag = std::make_shared<std::atomic_bool>(false);
 
-        for (std::size_t i = 0; i < config_.max_connections_; ++i) {
-            auto conn = std::make_shared<connection>(executor_, config_.host_, config_.port_);
-            conn->connect([this, conn, pending, shared_handler, error_flag](boost::system::error_code ec) {
-                if (!ec && !error_flag->load()) {
-                    connections_.push_back(conn);
+        for (std::size_t _i = 0; _i < config_.max_connections_; ++_i) {
+            auto _connection = std::make_shared<connection>(executor_, config_.host_, config_.port_);
+            _connection->connect([this, _connection, _pending, _shared_handler, _error_flag](boost::system::error_code ec) {
+                if (!ec && !_error_flag->load()) {
+                    connections_.push_back(_connection);
                 } else {
                     // LCOV_EXCL_START
-                    error_flag->store(true);
+                    _error_flag->store(true);
                     // LCOV_EXCL_STOP
                 }
 
-                if (pending->fetch_sub(1) == 1) {
-                    (*shared_handler)(error_flag->load() ? boost::asio::error::operation_aborted : boost::system::error_code{});
+                if (_pending->fetch_sub(1) == 1) {
+                    (*_shared_handler)(_error_flag->load() ? boost::asio::error::operation_aborted : boost::system::error_code{});
                 }
             });
         }
@@ -56,8 +56,8 @@ namespace throttr {
     }
 
     std::shared_ptr<connection> service::get_connection() {
-        const auto idx = next_connection_index_.fetch_add(1) % connections_.size();
-        return connections_[idx];
+        const auto _idx = next_connection_index_.fetch_add(1) % connections_.size();
+        return connections_[_idx];
     }
 
     void service::send_raw(std::vector<std::byte> buffer,
@@ -68,15 +68,15 @@ namespace throttr {
         }
 
 
-        const auto conn = get_connection();
-        if (!conn || !conn->is_open()) {
+        const auto _connection = get_connection();
+        if (!_connection || !_connection->is_open()) {
             // LCOV_EXCL_START
             handler(make_error_code(boost::system::errc::connection_aborted), {});
             return;
             // LCOV_EXCL_STOP
         }
 
-        conn->send(std::move(buffer), std::move(handler));
+        _connection->send(std::move(buffer), std::move(handler));
     }
 
 }

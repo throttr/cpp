@@ -77,9 +77,9 @@ namespace throttr {
 
         /**
          * Handle
-         * @param op
+         * @param operation
          */
-        void handle_write(const std::shared_ptr<write_operation>& op);
+        void handle_write(const std::shared_ptr<write_operation>& operation);
 
         /**
          * Strand

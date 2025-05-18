@@ -33,15 +33,15 @@ namespace throttr {
 
     void connection::connect(std::function<void(boost::system::error_code)> handler) {
         resolver_.async_resolve(host_, std::to_string(port_),
-                                [this, self = shared_from_this(), scope_handler = std::move(handler)](
+                                [this, self = shared_from_this(), _scope_handler = std::move(handler)](
                             const boost::system::error_code &ec, const auto& endpoints) mutable {
-                                    if (ec) return scope_handler(ec);
+                                    if (ec) return _scope_handler(ec);
 
                                     boost::asio::async_connect(socket_, endpoints,
-                                                               [self, final_handler = std::move(scope_handler)](
+                                                               [self, _final_handler = std::move(_scope_handler)](
                                                            const boost::system::error_code &connect_ec, auto) mutable {
 
-                                                                   final_handler(connect_ec);
+                                                                   _final_handler(connect_ec);
                                                                });
                                 });
     }
@@ -52,14 +52,14 @@ namespace throttr {
 
     void connection::send(std::vector<std::byte> buffer,
                           std::function<void(boost::system::error_code, std::vector<std::byte>)> handler) {
-        auto self = shared_from_this();
-        post(strand_, [self, buf = std::move(buffer), final_handler = std::move(handler)]() mutable {
-            self->queue_.emplace_back(std::move(buf), std::move(final_handler));
+        auto _self = shared_from_this();
+        post(strand_, [_self, _scoped_buffer = std::move(buffer), _final_handler = std::move(handler)]() mutable {
+            _self->queue_.emplace_back(std::move(_scoped_buffer), std::move(_final_handler));
             // LCOV_EXCL_START
-            if (!self->writing_) {
+            if (!_self->writing_) {
                 // LCOV_EXCL_STOP
-                self->writing_ = true;
-                self->do_write();
+                _self->writing_ = true;
+                _self->do_write();
             }
         });
     }
@@ -70,76 +70,73 @@ namespace throttr {
             return;
         }
 
-        auto op = std::make_shared<write_operation>(std::move(queue_.front()));
+        auto _operation = std::make_shared<write_operation>(std::move(queue_.front()));
         queue_.pop_front();
 
-        auto self = shared_from_this();
-        boost::asio::async_write(socket_, boost::asio::buffer(op->buffer_),
+        auto _self = shared_from_this();
+        boost::asio::async_write(socket_, boost::asio::buffer(_operation->buffer_),
             boost::asio::bind_executor(strand_,
-                [self, op](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
+                [_self, _operation](const boost::system::error_code &ec, std::size_t /*bytes_transferred*/) {
                     // LCOV_EXCL_START
                     if (ec) {
-                        op->handler(ec, {});
-                        self->do_write();
+                        _operation->handler(ec, {});
+                        _self->do_write();
                         return;
                     }
                     // LCOV_EXCL_STOP
-                    self->handle_write(op);
+                    _self->handle_write(_operation);
                 }));
     }
 
-    void connection::handle_write(const std::shared_ptr<write_operation>& op) {
-        auto self = shared_from_this();
-        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x02 || type == 0x06) {
-            auto head = std::make_shared<std::array<std::byte, 1>>();
+    void connection::handle_write(const std::shared_ptr<write_operation>& operation) {
+        auto _self = shared_from_this();
+        if (const auto _type = std::to_integer<uint8_t>(operation->buffer_[0]); _type == 0x02 || _type == 0x06) {
+            auto _head = std::make_shared<std::array<std::byte, 1>>();
             boost::asio::async_read(
-                socket_, boost::asio::buffer(*head),
+                socket_, boost::asio::buffer(*_head),
                 boost::asio::transfer_exactly(1),
                 boost::asio::bind_executor(strand_,
-                    [self, op, head](const boost::system::error_code& ec, std::size_t) {
-                        if (ec) {
-                            op->handler(ec, {});
-                            self->do_write();
+                    [_self, operation, _head](const boost::system::error_code& first_byte_ec, std::size_t) {
+                        if (first_byte_ec) {
+                            operation->handler(first_byte_ec, {});
+                            _self->do_write();
                             return;
                         }
 
-                        const auto status = std::to_integer<uint8_t>((*head)[0]);
-                        if (status == 0x00) {
-                            // Error, no hay cuerpo adicional
-                            op->handler({}, std::vector(head->begin(), head->end()));
-                            self->do_write();
+                        if (const auto _status = std::to_integer<uint8_t>((*_head)[0]); _status == 0x00) {
+                            operation->handler({}, std::vector(_head->begin(), _head->end()));
+                            _self->do_write();
                             return;
                         }
 
-                        constexpr std::size_t value_payload = sizeof(uint16_t) * 2 + 1;
-                        auto rest = std::make_shared<std::vector<std::byte>>(value_payload);
+                        constexpr std::size_t _value_payload = sizeof(uint16_t) * 2 + 1;
+                        auto _rest = std::make_shared<std::vector<std::byte>>(_value_payload);
                         boost::asio::async_read(
-                            self->socket_, boost::asio::buffer(*rest),
-                            boost::asio::transfer_exactly(value_payload),
-                            boost::asio::bind_executor(self->strand_,
-                                [self, op, head, rest](const boost::system::error_code& ec, std::size_t) {
-                                    if (ec) {
-                                        op->handler(ec, {});
+                            _self->socket_, boost::asio::buffer(*_rest),
+                            boost::asio::transfer_exactly(_value_payload),
+                            boost::asio::bind_executor(_self->strand_,
+                                [_self, operation, _head, _rest](const boost::system::error_code& partial_ec, std::size_t) {
+                                    if (partial_ec) {
+                                        operation->handler(partial_ec, {});
                                     } else {
-                                        // Unir head + rest
-                                        std::vector<std::byte> full;
-                                        full.reserve(1 + rest->size());
-                                        full.insert(full.end(), head->begin(), head->end());
-                                        full.insert(full.end(), rest->begin(), rest->end());
-                                        op->handler({}, std::move(full));
+                                        std::vector<std::byte> _full;
+                                        _full.reserve(1 + _rest->size());
+                                        _full.insert(_full.end(), _head->begin(), _head->end());
+                                        _full.insert(_full.end(), _rest->begin(), _rest->end());
+                                        operation->handler({}, std::move(_full));
                                     }
-                                    self->do_write();
+                                    _self->do_write();
                                 }));
                     }));
         } else {
-            auto response_buffer = std::make_shared<std::vector<std::byte>>(1);
+            auto _response_buffer = std::make_shared<std::vector<std::byte>>(1);
             boost::asio::async_read(
-                socket_, boost::asio::buffer(*response_buffer),
+                socket_, boost::asio::buffer(*_response_buffer),
                 boost::asio::transfer_exactly(1),
                 boost::asio::bind_executor(strand_,
-                    [self, op, response_buffer](const boost::system::error_code& ec, std::size_t) {
-                        op->handler(ec, ec ? std::vector<std::byte>{} : std::move(*response_buffer));
-                        self->do_write();
+                    [_self, operation, _response_buffer](const boost::system::error_code& ec, std::size_t) {
+                        operation->handler(ec, ec ? std::vector<std::byte>{} : std::move(*_response_buffer));
+                        _self->do_write();
                     }));
         }
     }

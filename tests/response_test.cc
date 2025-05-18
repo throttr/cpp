@@ -19,47 +19,48 @@
 #include <stdexcept>
 
 TEST(ResponseSimpleTest, ThrowsWhenBufferSizeIsInvalid) {
-    const std::vector buffer(2, std::byte{0x01});
+    const std::vector _buffer(2, std::byte{0x01});
 
     try {
-        throttr::response_status::from_buffer(buffer);
+        throttr::response_status::from_buffer(_buffer);
         FAIL() << "Expected std::runtime_error due to invalid buffer size";
-    } catch (const throttr::response_error& e) {
-        EXPECT_STREQ(e.what(), "response_simple: invalid buffer size");
+    } catch (const throttr::response_error& error) {
+        EXPECT_STREQ(error.what(), "response_status: invalid buffer size");
     }
 }
 
 TEST(ResponseSimpleTest, FromBufferSucceeds) {
-    std::vector buffer(1, std::byte{0x01});
-    auto [success] = throttr::response_status::from_buffer(buffer);
-    EXPECT_TRUE(success);
+    const std::vector _buffer(1, std::byte{0x01});
+    auto [_success] = throttr::response_status::from_buffer(_buffer);
+    EXPECT_TRUE(_success);
 }
 
 TEST(ResponseFullTest, ThrowsWhenBufferSizeIsInvalid) {
-    const std::vector buffer(17, std::byte{0x01});
+    const std::vector _buffer(17, std::byte{0x01});
 
     try {
-        throttr::response_query::from_buffer(buffer);
+        throttr::response_query::from_buffer(_buffer);
         FAIL() << "Expected std::runtime_error due to invalid buffer size";
-    } catch (const throttr::response_error& e) {
-        EXPECT_STREQ(e.what(), "response_full: invalid buffer size");
+    } catch (const throttr::response_error& error) {
+        EXPECT_STREQ(error.what(), "response_query: invalid buffer size");
     }
 }
 
 TEST(ResponseFullTest, FromBufferSucceeds) {
-    std::vector buffer(18, std::byte{0x01});
+    constexpr int _expected_buffer_size = sizeof(throttr::value_type) * 2 + 2;
+    std::vector _buffer(_expected_buffer_size, std::byte{0x01});
 
-    buffer[0] = std::byte{0x01};  // success = true
-    constexpr uint64_t quota_remaining = 100;
-    std::memcpy(&buffer[1], &quota_remaining, sizeof(uint64_t)); // quota_remaining = 100
-    buffer[9] = std::byte{0x01};  // ttl_type = milliseconds
-    constexpr uint64_t ttl_remaining = 1000;
-    std::memcpy(&buffer[10], &ttl_remaining, sizeof(int64_t)); // ttl_remaining = 1000
+    _buffer[0] = std::byte{0x01};  // success = true
+    constexpr throttr::value_type _quota = 7;
+    std::memcpy(&_buffer[1], &_quota, sizeof(throttr::value_type)); // quota = 7
+    _buffer[sizeof(throttr::value_type) + 1] = std::byte{0x03};  // ttl_type = milliseconds
+    constexpr throttr::value_type _ttl = 3;
+    std::memcpy(&_buffer[sizeof(throttr::value_type) * 2], &_ttl, sizeof(throttr::value_type)); // ttl = 3
 
-    const auto resp = throttr::response_query::from_buffer(buffer);
+    const auto _resp = throttr::response_query::from_buffer(_buffer);
 
-    EXPECT_TRUE(resp.success_);
-    EXPECT_EQ(resp.quota_, 100);
-    EXPECT_EQ(resp.ttl_type_, throttr::ttl_types::milliseconds);
-    EXPECT_EQ(resp.ttl_, 1000);
+    EXPECT_TRUE(_resp.success_);
+    EXPECT_EQ(_resp.quota_, 7);
+    EXPECT_EQ(_resp.ttl_type_, throttr::ttl_types::milliseconds);
+    EXPECT_EQ(_resp.ttl_, 3);
 }

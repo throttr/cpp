@@ -57,19 +57,22 @@ namespace throttr {
          * @return response_query
          */
         static response_query from_buffer(const std::vector<std::byte>& buffer) {
-            if (buffer.size() != 18) {
-                throw response_error("response_query: invalid buffer size");
+            if (buffer.size() == 1 || buffer.size() == sizeof(value_type) * 2 + 2) {
+                response_query resp;
+
+                resp.success_ = (buffer[0] == std::byte{0x01});
+
+                if (buffer.size() == 1) {
+                    return resp;
+                }
+
+                std::memcpy(&resp.quota_, buffer.data() + 1, sizeof(value_type));
+                resp.ttl_type_ = static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[1 + sizeof(value_type)]));
+                std::memcpy(&resp.ttl_, buffer.data() + sizeof(value_type) + 2, sizeof(value_type));
+
+                return resp;
             }
-
-            response_query resp;
-
-            resp.success_ = (buffer[0] == std::byte{0x01});
-
-            std::memcpy(&resp.quota_, buffer.data() + 1, sizeof(resp.quota_));
-            resp.ttl_type_ = static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[9]));
-            std::memcpy(&resp.ttl_, buffer.data() + 10, sizeof(resp.ttl_));
-
-            return resp;
+            throw response_error("response_query: invalid buffer size");
         }
     };
 

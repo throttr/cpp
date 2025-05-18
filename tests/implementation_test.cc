@@ -14,23 +14,23 @@
 #include <boost/asio.hpp>
 #include <thread>
 #include <chrono>
-#include <throttr/protocol.hpp>
+#include <throttr/protocol_wrapper.hpp>
 
 class TcpConnectionTest : public ::testing::Test {
 public:
-    boost::asio::io_context io;
-    boost::asio::ip::tcp::socket socket;
+    boost::asio::io_context io_;
+    boost::asio::ip::tcp::socket socket_;
 
-    TcpConnectionTest() : socket(io) {}
+    TcpConnectionTest() : socket_(io_) {}
 
     void SetUp() override {
     }
 
     void TearDown() override {
-        if (socket.is_open()) {
+        if (socket_.is_open()) {
             boost::system::error_code ec;
-            socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-            socket.close(ec);
+            socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+            socket_.close(ec);
         }
     }
 };
@@ -38,17 +38,17 @@ public:
 TEST_F(TcpConnectionTest, ConnectWaitAndDisconnect) {
     using boost::asio::ip::tcp;
 
-    tcp::resolver resolver(io);
-    const auto endpoints = resolver.resolve("127.0.0.1", "9000");
+    tcp::resolver _resolver(io_);
+    const auto _endpoints = _resolver.resolve("127.0.0.1", "9000");
 
     ASSERT_NO_THROW({
-        boost::asio::connect(socket, endpoints);
+        boost::asio::connect(socket_, _endpoints);
     });
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    ASSERT_TRUE(socket.is_open());
+    ASSERT_TRUE(socket_.is_open());
 
-    const auto buffer = throttr::request_insert_builder(
+    const auto _buffer = throttr::request_insert_builder(
         1000,                                   // quota
         throttr::ttl_types::seconds,           // ttl type
         60,                                     // ttl = 60 sec
@@ -56,19 +56,19 @@ TEST_F(TcpConnectionTest, ConnectWaitAndDisconnect) {
     );
 
     ASSERT_NO_THROW({
-        boost::asio::write(socket, boost::asio::buffer(buffer));
+        boost::asio::write(socket_, boost::asio::buffer(_buffer));
     });
 
-    std::vector<std::byte> response(64);
-    boost::system::error_code ec;
-    size_t n = socket.read_some(boost::asio::buffer(response), ec);
+    std::vector<std::byte> _response(1);
+    boost::system::error_code _ec;
+    size_t _n = socket_.read_some(boost::asio::buffer(_response), _ec);
 
-    ASSERT_FALSE(ec) << "Error on read: " << ec.message();
+    ASSERT_FALSE(_ec) << "Error on read: " << _ec.message();
 
-    std::cout << "Response (" << n << " bytes): ";
-    for (size_t i = 0; i < n; ++i) {
+    std::cout << "Response (" << _n << " bytes): ";
+    for (size_t _i = 0; _i < _n; ++_i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0')
-                  << static_cast<int>(std::to_integer<uint8_t>(response[i])) << " ";
+                  << static_cast<int>(std::to_integer<uint8_t>(_response[_i])) << " ";
     }
     std::cout << std::dec << std::endl;
 }
@@ -76,83 +76,88 @@ TEST_F(TcpConnectionTest, ConnectWaitAndDisconnect) {
 TEST_F(TcpConnectionTest, ConcatenateTwoInsertsAndReadResponse) {
     using boost::asio::ip::tcp;
 
-    tcp::resolver resolver(io);
-    const auto endpoints = resolver.resolve("127.0.0.1", "9000");
+    tcp::resolver _resolver(io_);
+    const auto _endpoints = _resolver.resolve("127.0.0.1", "9000");
 
     ASSERT_NO_THROW({
-        boost::asio::connect(socket, endpoints);
+        boost::asio::connect(socket_, _endpoints);
     });
 
-    const auto buffer1 = throttr::request_insert_builder(
+    const auto _buffer1 = throttr::request_insert_builder(
         500, throttr::ttl_types::seconds, 30, "consumer:batch|api/test-1"
     );
-    const auto buffer2 = throttr::request_insert_builder(
+    const auto _buffer2 = throttr::request_insert_builder(
         750, throttr::ttl_types::seconds, 45, "consumer:batch|api/test-2"
     );
 
-    std::vector<std::byte> concatenated;
-    concatenated.reserve(buffer1.size() + buffer2.size());
-    concatenated.insert(concatenated.end(), buffer1.begin(), buffer1.end());
-    concatenated.insert(concatenated.end(), buffer2.begin(), buffer2.end());
+    std::vector<std::byte> _concatenated;
+    _concatenated.reserve(_buffer1.size() + _buffer2.size());
+    _concatenated.insert(_concatenated.end(), _buffer1.begin(), _buffer1.end());
+    _concatenated.insert(_concatenated.end(), _buffer2.begin(), _buffer2.end());
 
     ASSERT_NO_THROW({
-        boost::asio::write(socket, boost::asio::buffer(concatenated));
+        boost::asio::write(socket_, boost::asio::buffer(_concatenated));
     });
 
-    for (int i = 0; i < 2; ++i) {
-        std::vector<std::byte> response(18);
-        boost::system::error_code ec;
-        size_t n = boost::asio::read(socket, boost::asio::buffer(response), ec);
+    for (int _i = 0; _i < 2; ++_i) {
+        std::vector<std::byte> _response(1);
+        boost::system::error_code _ec;
+        size_t _n = boost::asio::read(socket_, boost::asio::buffer(_response), _ec);
 
-        ASSERT_FALSE(ec) << "Error on read: " << i << ": " << ec.message();
-        ASSERT_EQ(n, 18u) << "Response " << i << " incomplete";
+        ASSERT_FALSE(_ec) << "Error on read: " << _i << ": " << _ec.message();
+        ASSERT_EQ(_n, 1u) << "Response " << _i << " incomplete";
 
-        std::cout << "Response " << i << " (" << n << " bytes): ";
-        for (size_t j = 0; j < n; ++j) {
+        std::cout << "Response " << _i << " (" << _n << " bytes): ";
+        for (size_t _j = 0; _j < _n; ++_j) {
             std::cout << std::hex << std::setw(2) << std::setfill('0')
-                      << static_cast<int>(std::to_integer<uint8_t>(response[j])) << " ";
+                      << static_cast<int>(std::to_integer<uint8_t>(_response[_j])) << " ";
         }
         std::cout << std::dec << std::endl;
     }
 }
 
-TEST_F(TcpConnectionTest, ConcatenateTwoInsertsAndReadFullResponseAtOnce) {
+TEST_F(TcpConnectionTest, ConcatenateTwoInsertsAndQueriesAtOnce) {
     using boost::asio::ip::tcp;
 
-    tcp::resolver resolver(io);
-    const auto endpoints = resolver.resolve("127.0.0.1", "9000");
+    tcp::resolver _resolver(io_);
+    const auto _endpoints = _resolver.resolve("127.0.0.1", "9000");
 
     ASSERT_NO_THROW({
-        boost::asio::connect(socket, endpoints);
+        boost::asio::connect(socket_, _endpoints);
     });
 
-    const auto buffer1 = throttr::request_insert_builder(
-        500, throttr::ttl_types::seconds, 30, "consumer:batch|api/test-1"
+    const auto _buffer1 = throttr::request_insert_builder(
+        5, throttr::ttl_types::seconds, 7, "consumer:batch|api/test-1"
     );
-    const auto buffer2 = throttr::request_insert_builder(
-        750, throttr::ttl_types::seconds, 45, "consumer:batch|api/test-2"
+    const auto _buffer2 = throttr::request_insert_builder(
+        1, throttr::ttl_types::seconds, 9, "consumer:batch|api/test-2"
     );
+    const auto _buffer3 = throttr::request_query_builder("consumer:batch|api/test-1");
+    const auto _buffer4 = throttr::request_query_builder("consumer:batch|api/test-2");
 
-    std::vector<std::byte> concatenated;
-    concatenated.reserve(buffer1.size() + buffer2.size());
-    concatenated.insert(concatenated.end(), buffer1.begin(), buffer1.end());
-    concatenated.insert(concatenated.end(), buffer2.begin(), buffer2.end());
+    std::vector<std::byte> _concatenated;
+    _concatenated.reserve(_buffer1.size() + _buffer2.size() + _buffer3.size() + _buffer4.size());
+    _concatenated.insert(_concatenated.end(), _buffer1.begin(), _buffer1.end());
+    _concatenated.insert(_concatenated.end(), _buffer2.begin(), _buffer2.end());
+    _concatenated.insert(_concatenated.end(), _buffer3.begin(), _buffer3.end());
+    _concatenated.insert(_concatenated.end(), _buffer4.begin(), _buffer4.end());
 
     ASSERT_NO_THROW({
-        boost::asio::write(socket, boost::asio::buffer(concatenated));
+        boost::asio::write(socket_, boost::asio::buffer(_concatenated));
     });
 
-    std::vector<std::byte> response(36);
-    boost::system::error_code ec;
-    const size_t n = boost::asio::read(socket, boost::asio::buffer(response), ec);
+    int _expected_length = 4 + 2 + sizeof(throttr::value_type) * 4;
+    std::vector<std::byte> _response(_expected_length);
+    boost::system::error_code _ec;
+    const size_t _n = boost::asio::read(socket_, boost::asio::buffer(_response), _ec);
 
-    ASSERT_FALSE(ec) << "Error on read: " << ec.message();
-    ASSERT_EQ(n, 36u) << "Response wasn't 36 bytes";
+    ASSERT_FALSE(_ec) << "Error on read: " << _ec.message();
+    ASSERT_EQ(_n, _expected_length) << "Response wasn't the expected bytes";
 
-    std::cout << "Response complete (" << n << " bytes): ";
-    for (size_t i = 0; i < n; ++i) {
+    std::cout << "Response complete (" << _n << " bytes): ";
+    for (size_t _i = 0; _i < _n; ++_i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0')
-                  << static_cast<int>(std::to_integer<uint8_t>(response[i])) << " ";
+                  << static_cast<int>(std::to_integer<uint8_t>(_response[_i])) << " ";
     }
 
     std::cout << std::dec << std::endl;

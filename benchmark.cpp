@@ -14,8 +14,8 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include <throttr/service.hpp>
-#include <throttr/response_simple.hpp>
-#include <throttr/response_full.hpp>
+#include <throttr/response_status.hpp>
+#include <throttr/response_query.hpp>
 #include <throttr/protocol.hpp>
 
 #include <boost/asio/io_context.hpp>
@@ -48,12 +48,11 @@ int main() {
     io.restart();
 
     constexpr int total = 100'000;
-    const std::string resource = "resource";
-    const std::string consumer = "consumer";
-    auto buffer = request_insert_builder(100000, 1, ttl_types::seconds, 10, consumer, resource);
+    const std::string key = "resource|consumer";
+    auto buffer = request_insert_builder(100000, ttl_types::seconds, 10, key);
     for (int i = 0; i < total; ++i) {
         post(io, [&, buffer]() {
-            svc.send<response_full>(buffer, [&](boost::system::error_code ec, response_full res) {
+            svc.send<response_query>(buffer, [&](boost::system::error_code ec, response_query res) {
                 // This scope doesn't requires operations
             });
         });

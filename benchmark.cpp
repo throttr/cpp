@@ -37,7 +37,7 @@ int main() {
     service svc(io.get_executor(), cfg);
 
     bool ready = false;
-    svc.connect([&](boost::system::error_code ec) { // NOSONAR
+    svc.connect([&](const boost::system::error_code &ec) { // NOSONAR
         if (ec) {
             std::cerr << "Connection error: " << ec.message() << "\n";
             return;

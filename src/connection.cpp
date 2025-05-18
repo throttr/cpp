@@ -89,24 +89,58 @@ namespace throttr {
     }
 
     void connection::handle_write(const std::shared_ptr<write_operation>& op) {
-        std::size_t expected = 1;
-        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x01 || type == 0x02)
-            expected = 18;
-
-        auto response_buffer = std::make_shared<std::vector<std::byte>>(expected);
         auto self = shared_from_this();
+        if (const auto type = std::to_integer<uint8_t>(op->buffer_[0]); type == 0x02 || type == 0x06) {
+            auto head = std::make_shared<std::array<std::byte, 1>>();
+            boost::asio::async_read(
+                socket_, boost::asio::buffer(*head),
+                boost::asio::transfer_exactly(1),
+                boost::asio::bind_executor(strand_,
+                    [self, op, head](const boost::system::error_code& ec, std::size_t) {
+                        if (ec) {
+                            op->handler(ec, {});
+                            self->do_write();
+                            return;
+                        }
 
-        boost::asio::async_read(
-            socket_, boost::asio::buffer(*response_buffer),
-            boost::asio::transfer_exactly(expected),
-            boost::asio::bind_executor(strand_,
-                [self, op, response_buffer](const boost::system::error_code &ec, const std::size_t n) mutable {
-                    if (ec) {
-                        op->handler(ec, {});
-                    } else {
-                        op->handler({}, std::move(*response_buffer));
-                    }
-                    self->do_write();
-                }));
+                        const auto status = std::to_integer<uint8_t>((*head)[0]);
+                        if (status == 0x00) {
+                            // Error, no hay cuerpo adicional
+                            op->handler({}, std::vector(head->begin(), head->end()));
+                            self->do_write();
+                            return;
+                        }
+
+                        constexpr std::size_t value_payload = sizeof(uint16_t) * 2 + 1;
+                        auto rest = std::make_shared<std::vector<std::byte>>(value_payload);
+                        boost::asio::async_read(
+                            self->socket_, boost::asio::buffer(*rest),
+                            boost::asio::transfer_exactly(value_payload),
+                            boost::asio::bind_executor(self->strand_,
+                                [self, op, head, rest](const boost::system::error_code& ec, std::size_t) {
+                                    if (ec) {
+                                        op->handler(ec, {});
+                                    } else {
+                                        // Unir head + rest
+                                        std::vector<std::byte> full;
+                                        full.reserve(1 + rest->size());
+                                        full.insert(full.end(), head->begin(), head->end());
+                                        full.insert(full.end(), rest->begin(), rest->end());
+                                        op->handler({}, std::move(full));
+                                    }
+                                    self->do_write();
+                                }));
+                    }));
+        } else {
+            auto response_buffer = std::make_shared<std::vector<std::byte>>(1);
+            boost::asio::async_read(
+                socket_, boost::asio::buffer(*response_buffer),
+                boost::asio::transfer_exactly(1),
+                boost::asio::bind_executor(strand_,
+                    [self, op, response_buffer](const boost::system::error_code& ec, std::size_t) {
+                        op->handler(ec, ec ? std::vector<std::byte>{} : std::move(*response_buffer));
+                        self->do_write();
+                    }));
+        }
     }
 }

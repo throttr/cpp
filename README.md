@@ -62,7 +62,7 @@ using namespace throttr;
 
 int main() {
     boost::asio::io_context io;
-    service_config cfg{ "127.0.0.1", 9000, 4 };
+    service_config cfg{ "throttr", 9000, 4 };
 
     auto svc = std::make_shared<service>(io.get_executor(), cfg);
 

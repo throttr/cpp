@@ -39,13 +39,12 @@ TEST_F(TcpConnectionTest, ConnectWaitAndDisconnect) {
     using boost::asio::ip::tcp;
 
     tcp::resolver _resolver(io_);
-    const auto _endpoints = _resolver.resolve("127.0.0.1", "9000");
+    const auto _endpoints = _resolver.resolve("throttr", "9000");
 
     ASSERT_NO_THROW({
         boost::asio::connect(socket_, _endpoints);
     });
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
     ASSERT_TRUE(socket_.is_open());
 
     const auto _buffer = throttr::request_insert_builder(
@@ -77,7 +76,7 @@ TEST_F(TcpConnectionTest, ConcatenateTwoInsertsAndReadResponse) {
     using boost::asio::ip::tcp;
 
     tcp::resolver _resolver(io_);
-    const auto _endpoints = _resolver.resolve("127.0.0.1", "9000");
+    const auto _endpoints = _resolver.resolve("throttr", "9000");
 
     ASSERT_NO_THROW({
         boost::asio::connect(socket_, _endpoints);
@@ -120,7 +119,7 @@ TEST_F(TcpConnectionTest, ConcatenateTwoInsertsAndQueriesAtOnce) {
     using boost::asio::ip::tcp;
 
     tcp::resolver _resolver(io_);
-    const auto _endpoints = _resolver.resolve("127.0.0.1", "9000");
+    const auto _endpoints = _resolver.resolve("throttr", "9000");
 
     ASSERT_NO_THROW({
         boost::asio::connect(socket_, _endpoints);

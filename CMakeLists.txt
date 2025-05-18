@@ -13,6 +13,10 @@ option(BUILD_SDK_TESTS "Build SDK tests cases" ON)
 option(BUILD_PROTOCOL_TESTS "Build PROTOCOL tests cases" OFF)
 option(BUILD_SDK_BENCHMARK "Build SDK BENCHMARK" ON)
 
+set(RUNTIME_VALUE_SIZE "UINT16" CACHE STRING "Set value type for Throttr (UINT8, UINT16, UINT32, UINT64)")
+set_property(CACHE RUNTIME_VALUE_SIZE PROPERTY STRINGS UINT8 UINT16 UINT32 UINT64)
+
+message(STATUS "Using RUNTIME_VALUE_SIZE = ${RUNTIME_VALUE_SIZE}")
 
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g --coverage -fprofile-arcs -ftest-coverage")
@@ -33,7 +37,7 @@ include(FetchContent)
 FetchContent_Declare(
         throttr-protocol
         GIT_REPOSITORY https://github.com/throttr/protocol.git
-        GIT_TAG 1.0.1
+        GIT_TAG 5.0.0
 )
 FetchContent_MakeAvailable(throttr-protocol)
 
@@ -82,4 +86,5 @@ if (BUILD_SDK_TESTS)
 
     include(GoogleTest)
     gtest_discover_tests(throttr-sdk-tests)
+    target_compile_definitions(throttr-sdk-tests PRIVATE THROTTR_VALUE_SIZE_${RUNTIME_VALUE_SIZE})
 endif()

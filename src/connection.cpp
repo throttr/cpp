@@ -41,7 +41,6 @@ namespace throttr {
                                                                [self, final_handler = std::move(scope_handler)](
                                                            const boost::system::error_code &connect_ec, auto) mutable {
 
-                                                                   self->socket_.set_option(boost::asio::ip::tcp::no_delay(true));
                                                                    final_handler(connect_ec);
                                                                });
                                 });

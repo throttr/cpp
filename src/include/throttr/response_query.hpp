@@ -16,7 +16,7 @@
 #ifndef THROTTR_RESPONSE_FULL_HPP
 #define THROTTR_RESPONSE_FULL_HPP
 
-#include <throttr/protocol.hpp>
+#include <throttr/protocol_wrapper.hpp>
 #include <throttr/exception.hpp>
 
 #include <cstddef>
@@ -27,47 +27,47 @@
 
 namespace throttr {
     /**
-     * Response full
+     * Response query
      */
-    struct response_full {
+    struct response_query {
         /**
          * Success
          */
-        bool success = false;
+        bool success_ = false;
 
         /**
          * Quota remaining
          */
-        uint64_t quota_remaining = 0;
+        value_type quota_ = 0;
 
         /**
          * TTL type
          */
-        ttl_types ttl_type = ttl_types::milliseconds;
+        ttl_types ttl_type_ = ttl_types::milliseconds;
 
         /**
          * TTL remaining
          */
-        int64_t ttl_remaining = 0;
+        value_type ttl_ = 0;
 
         /**
          * From buffer
          *
          * @param buffer
-         * @return response_full
+         * @return response_query
          */
-        static response_full from_buffer(const std::vector<std::byte>& buffer) {
+        static response_query from_buffer(const std::vector<std::byte>& buffer) {
             if (buffer.size() != 18) {
-                throw response_error("response_full: invalid buffer size");
+                throw response_error("response_query: invalid buffer size");
             }
 
-            response_full resp;
+            response_query resp;
 
-            resp.success = (buffer[0] == std::byte{0x01});
+            resp.success_ = (buffer[0] == std::byte{0x01});
 
-            std::memcpy(&resp.quota_remaining, buffer.data() + 1, sizeof(resp.quota_remaining));
-            resp.ttl_type = static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[9]));
-            std::memcpy(&resp.ttl_remaining, buffer.data() + 10, sizeof(resp.ttl_remaining));
+            std::memcpy(&resp.quota_, buffer.data() + 1, sizeof(resp.quota_));
+            resp.ttl_type_ = static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[9]));
+            std::memcpy(&resp.ttl_, buffer.data() + 10, sizeof(resp.ttl_));
 
             return resp;
         }

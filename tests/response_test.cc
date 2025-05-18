@@ -14,15 +14,15 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include <gtest/gtest.h>
-#include <throttr/response_simple.hpp>
-#include <throttr/response_full.hpp>
+#include <throttr/response_status.hpp>
+#include <throttr/response_query.hpp>
 #include <stdexcept>
 
 TEST(ResponseSimpleTest, ThrowsWhenBufferSizeIsInvalid) {
     const std::vector buffer(2, std::byte{0x01});
 
     try {
-        throttr::response_simple::from_buffer(buffer);
+        throttr::response_status::from_buffer(buffer);
         FAIL() << "Expected std::runtime_error due to invalid buffer size";
     } catch (const throttr::response_error& e) {
         EXPECT_STREQ(e.what(), "response_simple: invalid buffer size");
@@ -31,7 +31,7 @@ TEST(ResponseSimpleTest, ThrowsWhenBufferSizeIsInvalid) {
 
 TEST(ResponseSimpleTest, FromBufferSucceeds) {
     std::vector buffer(1, std::byte{0x01});
-    auto [success] = throttr::response_simple::from_buffer(buffer);
+    auto [success] = throttr::response_status::from_buffer(buffer);
     EXPECT_TRUE(success);
 }
 
@@ -39,7 +39,7 @@ TEST(ResponseFullTest, ThrowsWhenBufferSizeIsInvalid) {
     const std::vector buffer(17, std::byte{0x01});
 
     try {
-        throttr::response_full::from_buffer(buffer);
+        throttr::response_query::from_buffer(buffer);
         FAIL() << "Expected std::runtime_error due to invalid buffer size";
     } catch (const throttr::response_error& e) {
         EXPECT_STREQ(e.what(), "response_full: invalid buffer size");
@@ -56,10 +56,10 @@ TEST(ResponseFullTest, FromBufferSucceeds) {
     constexpr uint64_t ttl_remaining = 1000;
     std::memcpy(&buffer[10], &ttl_remaining, sizeof(int64_t)); // ttl_remaining = 1000
 
-    const auto resp = throttr::response_full::from_buffer(buffer);
+    const auto resp = throttr::response_query::from_buffer(buffer);
 
-    EXPECT_TRUE(resp.success);
-    EXPECT_EQ(resp.quota_remaining, 100);
-    EXPECT_EQ(resp.ttl_type, throttr::ttl_types::milliseconds);
-    EXPECT_EQ(resp.ttl_remaining, 1000);
+    EXPECT_TRUE(resp.success_);
+    EXPECT_EQ(resp.quota_, 100);
+    EXPECT_EQ(resp.ttl_type_, throttr::ttl_types::milliseconds);
+    EXPECT_EQ(resp.ttl_, 1000);
 }

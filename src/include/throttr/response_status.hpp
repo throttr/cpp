@@ -24,27 +24,27 @@
 
 namespace throttr {
     /**
-     * Response simple
+     * Response status
      */
-    struct response_simple {
+    struct response_status {
         /**
          * Success
          */
-        bool success = false;
+        bool success_ = false;
 
         /**
          * From buffer
          *
          * @param buffer
-         * @return response_simple
+         * @return response_status
          */
-        static response_simple from_buffer(const std::vector<std::byte>& buffer) {
+        static response_status from_buffer(const std::vector<std::byte>& buffer) {
             if (buffer.size() != 1) {
-                throw response_error("response_simple: invalid buffer size");
+                throw response_error("response_status: invalid buffer size");
             }
 
-            return response_simple{
-                .success = (buffer[0] == std::byte{0x01})
+            return response_status{
+                .success_ = (buffer[0] == std::byte{0x01})
             };
         }
     };

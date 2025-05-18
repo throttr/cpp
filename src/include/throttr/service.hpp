@@ -16,8 +16,8 @@
 #ifndef THROTTR_SERVICE_HPP
 #define THROTTR_SERVICE_HPP
 
-#include <throttr/response_simple.hpp>
-#include <throttr/response_full.hpp>
+#include <throttr/response_status.hpp>
+#include <throttr/response_query.hpp>
 
 #include <vector>
 #include <atomic>
@@ -124,11 +124,11 @@ namespace throttr {
      * @return void
      */
     template<>
-    inline void service::send<response_simple>(std::vector<std::byte> buffer,
-                                               std::function<void(boost::system::error_code, response_simple)> handler) {
+    inline void service::send<response_status>(std::vector<std::byte> buffer,
+                                               std::function<void(boost::system::error_code, response_status)> handler) {
         send_raw(std::move(buffer), [final_handler = std::move(handler)](auto ec, const auto& data) mutable {
             if (ec) return final_handler(ec, {});
-            final_handler({}, response_simple::from_buffer(data));
+            final_handler({}, response_status::from_buffer(data));
         });
     }
 
@@ -138,11 +138,11 @@ namespace throttr {
      * @return void
      */
     template<>
-    inline void service::send<response_full>(std::vector<std::byte> buffer,
-                                             std::function<void(boost::system::error_code, response_full)> handler) {
+    inline void service::send<response_query>(std::vector<std::byte> buffer,
+                                             std::function<void(boost::system::error_code, response_query)> handler) {
         send_raw(std::move(buffer), [final_handler = std::move(handler)](auto ec, auto data) mutable {
             if (ec) return final_handler(ec, {});
-            final_handler({}, response_full::from_buffer(data));
+            final_handler({}, response_query::from_buffer(data));
         });
     }
 

@@ -15,8 +15,8 @@
 
 #include <gtest/gtest.h>
 #include <throttr/service.hpp>
-#include <throttr/response_simple.hpp>
-#include <throttr/response_full.hpp>
+#include <throttr/response_status.hpp>
+#include <throttr/response_query.hpp>
 #include <throttr/protocol.hpp>
 #include <throttr/connection.hpp>
 
@@ -55,13 +55,12 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
     ::testing::GTEST_FLAG(output) = "stream";
     std::cout << std::unitbuf; // Flush en cada línea
 
-    const std::string consumer = "user:insert-and-query";
-    const std::string resource = "/api/insert-and-query";
+    const std::string key = "user:insert-and-query|/api/insert-and-query";
 
     bool finished = false;
 
 
-    auto insert = request_insert_builder(5, 0, ttl_types::seconds, 5, consumer, resource);
+    auto insert = request_insert_builder(5, ttl_types::seconds, 5, key);
 
     svc->send_raw(insert,
         [&](boost::system::error_code ec, std::vector<std::byte> raw_insert) { // NOSONAR
@@ -75,22 +74,22 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
             std::cerr << std::dec << "\n"; // NOSONAR
 
             try {
-                auto insert_result = response_full::from_buffer(raw_insert);
+                auto insert_result = response_query::from_buffer(raw_insert);
 
-                EXPECT_TRUE(insert_result.success);
-                EXPECT_EQ(insert_result.quota_remaining, 5);
-                EXPECT_EQ(insert_result.ttl_type, ttl_types::seconds);
+                EXPECT_TRUE(insert_result.success_);
+                EXPECT_EQ(insert_result.quota_, 5);
+                EXPECT_EQ(insert_result.ttl_type_, ttl_types::seconds);
 
-                svc->send_raw(request_query_builder(consumer, resource),
+                svc->send_raw(request_query_builder(key),
                     [&](boost::system::error_code ec2, std::vector<std::byte> raw_query) {
                         std::cerr << "[Query] ec: " << ec2.message() << ", bytes: " << raw_query.size() << "\n";
                         if (ec2) return;
 
                         try { // NOSONAR
-                            auto query_result = response_full::from_buffer(raw_query);
-                            EXPECT_TRUE(query_result.success);
-                            EXPECT_EQ(query_result.quota_remaining, 5);
-                            EXPECT_EQ(query_result.ttl_type, ttl_types::seconds);
+                            auto query_result = response_query::from_buffer(raw_query);
+                            EXPECT_TRUE(query_result.success_);
+                            EXPECT_EQ(query_result.quota_, 5);
+                            EXPECT_EQ(query_result.ttl_type_, ttl_types::seconds);
                             finished = true;
                         } catch (const std::exception& ex) { // NOSONAR
                             std::cerr << "[Query parse error] " << ex.what() << "\n";
@@ -106,34 +105,32 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
 }
 
 TEST_F(ServiceTestFixture, ConsumeViaInsert) {
-    const std::string consumer = "user:consume-insert";
-    const std::string resource = "/api/consume-insert";
+    const std::string key = "user:consume-insert|/api/consume-insert";
 
-    int step = 0;
     bool finished = false;
 
     auto do_query = [&]() {
-        svc->send<response_full>(request_query_builder(consumer, resource),
-            [&](boost::system::error_code ec, response_full query_result) {
+        svc->send<response_query>(request_query_builder(key),
+            [&](boost::system::error_code ec, response_query query_result) {
                 ASSERT_FALSE(ec);
-                EXPECT_TRUE(query_result.quota_remaining <= 0);
+                EXPECT_TRUE(query_result.quota_ <= 0);
                 finished = true;
             });
     };
 
     auto consume = [&](int i) {
-        auto insert_consume = request_insert_builder(0, 1, ttl_types::seconds, 5, consumer, resource);
-        svc->send<response_full>(insert_consume,
-            [&, i](boost::system::error_code ec, response_full response) {
+        auto insert_consume = request_insert_builder(0, ttl_types::seconds, 5, key);
+        svc->send<response_query>(insert_consume,
+            [&, i](boost::system::error_code ec, response_query response) {
                 ASSERT_FALSE(ec);
-                EXPECT_TRUE(response.success);
-                EXPECT_EQ(response.quota_remaining, 1 - i);
+                EXPECT_TRUE(response.success_);
+                EXPECT_EQ(response.quota_, 1 - i);
                 if (i == 1) do_query();
             });
     };
 
-    svc->send<response_full>(request_insert_builder(2, 0, ttl_types::seconds, 5, consumer, resource),
-        [&](boost::system::error_code ec, response_full) {
+    svc->send<response_query>(request_insert_builder(2, ttl_types::seconds, 5, key),
+        [&](boost::system::error_code ec, response_query) {
             ASSERT_FALSE(ec);
             consume(0);
             consume(1);
@@ -144,32 +141,31 @@ TEST_F(ServiceTestFixture, ConsumeViaInsert) {
 }
 
 TEST_F(ServiceTestFixture, UpdateDecreaseQuota) {
-    const std::string consumer = "user:update";
-    const std::string resource = "/api/update";
+    const std::string key = "user:update|/api/update";
     bool finished = false;
     int updates = 0;
 
     auto do_query = [&]() {
-        svc->send<response_full>(request_query_builder(consumer, resource),
-            [&](boost::system::error_code ec, response_full result) {
+        svc->send<response_query>(request_query_builder(key),
+            [&](boost::system::error_code ec, response_query result) {
                 ASSERT_FALSE(ec);
-                EXPECT_EQ(result.quota_remaining, 0);
+                EXPECT_EQ(result.quota_, 0);
                 finished = true;
             });
     };
 
     auto do_update = [&]() {
-        auto update = request_update_builder(attribute_types::quota, change_types::decrease, 1, consumer, resource);
-        svc->send<response_simple>(update,
-            [&](boost::system::error_code ec, response_simple update_result) {
+        auto update = request_update_builder(attribute_types::quota, change_types::decrease, 1, key);
+        svc->send<response_status>(update,
+            [&](boost::system::error_code ec, response_status update_result) {
                 ASSERT_FALSE(ec);
-                EXPECT_TRUE(update_result.success);
+                EXPECT_TRUE(update_result.success_);
                 if (++updates == 3) do_query();
             });
     };
 
-    svc->send<response_full>(request_insert_builder(2, 0, ttl_types::seconds, 5, consumer, resource),
-        [&](boost::system::error_code ec, response_full) {
+    svc->send<response_query>(request_insert_builder(2, ttl_types::seconds, 5, key),
+        [&](boost::system::error_code ec, response_query) {
             ASSERT_FALSE(ec);
             do_update();
             do_update();
@@ -181,22 +177,21 @@ TEST_F(ServiceTestFixture, UpdateDecreaseQuota) {
 }
 
 TEST_F(ServiceTestFixture, PurgeThenQuery) {
-    const std::string consumer = "user:purge";
-    const std::string resource = "/api/purge";
+    const std::string key = "user:purge|/api/purge";
     bool finished = false;
 
-    svc->send<response_full>(request_insert_builder(1, 0, ttl_types::seconds, 5, consumer, resource),
-        [&](boost::system::error_code ec, response_full) {
+    svc->send<response_query>(request_insert_builder(1, ttl_types::seconds, 5, key),
+        [&](boost::system::error_code ec, response_query) {
             ASSERT_FALSE(ec);
-            svc->send<response_simple>(request_purge_builder(consumer, resource),
-                [&](boost::system::error_code ec2, response_simple purge_response) {
+            svc->send<response_status>(request_purge_builder(key),
+                [&](boost::system::error_code ec2, response_status purge_response) {
                     ASSERT_FALSE(ec2);
-                    EXPECT_TRUE(purge_response.success);
+                    EXPECT_TRUE(purge_response.success_);
 
-                    svc->send<response_full>(request_query_builder(consumer, resource),
-                        [&](boost::system::error_code ec3, response_full query_result) {
+                    svc->send<response_query>(request_query_builder(key),
+                        [&](boost::system::error_code ec3, response_query query_result) {
                             ASSERT_FALSE(ec3);
-                            EXPECT_FALSE(query_result.success);
+                            EXPECT_FALSE(query_result.success_);
                             finished = true;
                         });
                 });

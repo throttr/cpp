@@ -43,6 +43,7 @@ jobs:
           gcovr --filter='src/' --print-summary --sort-percentage
 
       - name: Upload coverage reports to Codecov
+        if: ${{ matrix.size == 'UINT16' }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

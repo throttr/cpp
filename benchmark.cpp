@@ -53,7 +53,7 @@ int main() {
     auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);
     for (int i = 0; i < total; ++i) {
         post(io, [&, buffer]() {
-            svc.send<response_query>(buffer, [&](boost::system::error_code ec, response_query res) {
+            svc.send<response_status>(buffer, [&](boost::system::error_code ec, response_status res) {
                 boost::ignore_unused(ec, res);
             });
         });

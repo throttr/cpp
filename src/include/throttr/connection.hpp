@@ -28,6 +28,7 @@
 #include <string>
 #include <throttr/protocol_wrapper.hpp>
 #include <throttr/write_operation.hpp>
+#include <throttr/aliases.hpp>
 #include <vector>
 
 namespace throttr {
@@ -85,11 +86,47 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   void send(std::vector<std::byte> buffer,
             std::function<void(boost::system::error_code,
-                               std::vector<std::byte>)> handler) {
+                               std::vector<std::vector<std::byte>>)> handler) {
     auto _self = shared_from_this();
+    std::vector _heads = { std::byte{ buffer[0] } };
     post(strand_, [_self, _scoped_buffer = std::move(buffer),
+                    _scoped_heads = std::move(_heads),
                    _final_handler = std::move(handler)]() mutable {
       _self->queue_.emplace_back(std::move(_scoped_buffer),
+                                 std::move(_scoped_heads),
+                                 std::move(_final_handler));
+      // LCOV_EXCL_START
+      if (!_self->writing_) {
+        // LCOV_EXCL_STOP
+        _self->writing_ = true;
+        _self->do_write();
+      }
+    });
+  }
+
+  void sendMany(std::vector<std::vector<std::byte>> chunks, std::function<void(boost::system::error_code,
+                               std::vector<std::vector<std::byte>>)> handler) {
+    std::vector<std::byte> _heads;
+    std::vector<std::byte> _buffer;
+    _heads.reserve(chunks.size());
+    size_t _total_size = 0;
+    for (const auto& buffer : chunks) {
+      _heads.push_back(buffer.at(0));
+      _total_size += buffer.size();
+    }
+
+    _buffer.reserve(_total_size);
+
+    for (const auto& chunk : chunks) {
+      _buffer.insert(_buffer.end(), chunk.begin(), chunk.end());
+    }
+
+    auto _self = shared_from_this();
+    post(strand_, [_self, _scoped_buffer = std::move(_buffer),
+                  _scoped_heads = std::move(_heads),
+                   _final_handler = std::move(handler)]() mutable {
+      _self->queue_.emplace_back(std::move(_scoped_buffer),
+                                 std::move(_scoped_heads),
                                  std::move(_final_handler));
       // LCOV_EXCL_START
       if (!_self->writing_) {
@@ -188,7 +225,7 @@ class connection : public std::enable_shared_from_this<connection> {
               if (const auto _status = std::to_integer<uint8_t>((*_head)[0]);
                   _status == 0x00) {
                 operation->handler({},
-                                   std::vector(_head->begin(), _head->end()));
+                                   { std::vector(_head->begin(), _head->end()) });
                 _self->do_write();
                 return;
               }
@@ -262,7 +299,7 @@ class connection : public std::enable_shared_from_this<connection> {
                 _full.insert(_full.end(), head->begin(), head->end());
                 _full.insert(_full.end(), header->begin(), header->end());
                 _full.insert(_full.end(), _value->begin(), _value->end());
-                operation->handler({}, std::move(_full));
+                operation->handler({}, { std::move(_full) });
               }
               _self->do_write();
             }));
@@ -275,8 +312,8 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   void handle_response_get(const std::shared_ptr<write_operation>& operation) {
     auto _self = shared_from_this();
-    read_response_head(operation, [_self, operation](auto _head) {
-      _self->read_get_header(operation, _head);
+    read_response_head(operation, [_self, operation](auto head) {
+      _self->read_get_header(operation, head);
     });
   }
 
@@ -308,7 +345,7 @@ class connection : public std::enable_shared_from_this<connection> {
                 _full.reserve(1 + _rest->size());
                 _full.insert(_full.end(), head->begin(), head->end());
                 _full.insert(_full.end(), _rest->begin(), _rest->end());
-                operation->handler({}, std::move(_full));
+                operation->handler({}, { std::move(_full) });
               }
               _self->do_write();
             }));
@@ -322,8 +359,8 @@ class connection : public std::enable_shared_from_this<connection> {
   void handle_response_query(
       const std::shared_ptr<write_operation>& operation) {
     auto _self = shared_from_this();
-    read_response_head(operation, [_self, operation](auto _head) {
-      _self->read_query_value(operation, _head);
+    read_response_head(operation, [_self, operation](auto head) {
+      _self->read_query_value(operation, head);
     });
   }
 
@@ -342,8 +379,7 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::bind_executor(
             strand_, [_self, operation, _response_buffer](
                          const boost::system::error_code& ec, std::size_t) {
-              operation->handler(ec, ec ? std::vector<std::byte>{}
-                                        : std::move(*_response_buffer));
+              operation->handler(ec, {ec ? std::vector<std::byte>{} : std::move(*_response_buffer)});
               _self->do_write();
             }));
   }

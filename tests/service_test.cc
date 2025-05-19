@@ -63,27 +63,27 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
     const auto _insert = request_insert_builder(5, ttl_types::seconds, 5, _key);
 
     svc_->send_raw(_insert,
-        [&](boost::system::error_code ec, const std::vector<std::byte> &raw_insert) { // NOSONAR
+        [&](boost::system::error_code ec, const std::vector<std::vector<std::byte>> &raw_insert) { // NOSONAR
             std::cerr << "[Insert] ec: " << ec.message() << ", bytes: " << raw_insert.size() << "\n";
             if (ec) return;
 
             std::cerr << "[RAW_INSERT] ";
-            for (const auto _b : raw_insert) {
+            for (const auto _b : raw_insert.at(0)) {
                 std::cerr << std::hex << std::setw(2) << std::setfill('0') << std::to_integer<int>(_b) << " ";
             }
             std::cerr << std::dec << "\n"; // NOSONAR
 
             try {
-                const auto insert_result = response_status::from_buffer(raw_insert);
+                const auto insert_result = response_status::from_buffer(raw_insert.at(0));
                 EXPECT_TRUE(insert_result.success_);
 
                 svc_->send_raw(request_query_builder(_key),
-                    [&](const boost::system::error_code &ec2, const std::vector<std::byte> &raw_query) {
+                    [&](const boost::system::error_code &ec2, const std::vector<std::vector<std::byte>> &raw_query) {
                         std::cerr << "[Query] ec: " << ec2.message() << ", bytes: " << raw_query.size() << "\n";
                         if (ec2) return;
 
                         try { // NOSONAR
-                            const auto query_result = response_query::from_buffer(raw_query);
+                            const auto query_result = response_query::from_buffer(raw_query.at(0));
                             EXPECT_TRUE(query_result.success_);
                             EXPECT_EQ(query_result.quota_, 5);
                             EXPECT_EQ(query_result.ttl_type_, ttl_types::seconds);

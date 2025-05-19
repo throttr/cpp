@@ -108,7 +108,7 @@ class service {
    */
   void send_raw(std::vector<std::byte> buffer,
                 std::function<void(boost::system::error_code,
-                                   std::vector<std::byte>)> handler) {
+                                   std::vector<std::vector<std::byte>>)> handler) {
     // LCOV_EXCL_START
     if (connections_.empty()) {
       // LCOV_EXCL_STOP
@@ -185,8 +185,8 @@ inline void service::send<response_status>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_status::from_buffer(data));
-  });
+    _final_handler({}, response_status::from_buffer(data.at(0)) );
+           });
 }
 
 /**
@@ -204,7 +204,7 @@ inline void service::send<response_query>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_query::from_buffer(data));
+    _final_handler({}, response_query::from_buffer(data.at(0)));
   });
 }
 
@@ -223,7 +223,7 @@ inline void service::send<response_get>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_get::from_buffer(data));
+    _final_handler({}, response_get::from_buffer(data.at(0)));
   });
 }
 

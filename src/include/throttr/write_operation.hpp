@@ -31,10 +31,22 @@ struct write_operation {
   std::vector<std::byte> buffer_;
 
   /**
+   * Heads
+   */
+  std::vector<std::byte> heads_;
+
+  /**
    * Promise
    */
-  std::function<void(boost::system::error_code, std::vector<std::byte>)>
+  std::function<void(boost::system::error_code, std::vector<std::vector<std::byte>>)>
       handler;
+
+  write_operation(std::vector<std::byte>&& buffer,
+                std::vector<std::byte>&& heads,
+                std::function<void(boost::system::error_code, std::vector<std::vector<std::byte>>)>&& handler)
+    : buffer_(std::move(buffer)),
+      heads_(std::move(heads)),
+      handler(std::move(handler)) {}
 };
 }  // namespace throttr
 

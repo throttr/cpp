@@ -45,7 +45,7 @@ TEST_F(TcpConnectionTest, ConnectWaitAndDisconnect) {
     ASSERT_TRUE(socket_.is_open());
 
     const auto _buffer = throttr::request_insert_builder(
-        1000,                                   // quota
+        3,                                   // quota
         throttr::ttl_types::seconds,           // ttl type
         60,                                     // ttl = 60 sec
         "consumer:insert-only|api/insert-only"  // key
@@ -80,10 +80,10 @@ TEST_F(TcpConnectionTest, ConcatenateTwoInsertsAndReadResponse) {
     });
 
     const auto _buffer1 = throttr::request_insert_builder(
-        500, throttr::ttl_types::seconds, 30, "consumer:batch|api/test-1"
+        32, throttr::ttl_types::seconds, 30, "consumer:batch|api/test-1"
     );
     const auto _buffer2 = throttr::request_insert_builder(
-        750, throttr::ttl_types::seconds, 45, "consumer:batch|api/test-2"
+        64, throttr::ttl_types::seconds, 45, "consumer:batch|api/test-2"
     );
 
     std::vector<std::byte> _concatenated;

@@ -23,81 +23,78 @@
 #include <throttr/protocol_wrapper.hpp>
 #include <vector>
 
-namespace throttr
-{
+namespace throttr {
 /**
  * Response GET
  */
-struct response_get
-{
-    /**
-     * Success
-     */
-    bool success_ = false;
+struct response_get {
+  /**
+   * Success
+   */
+  bool success_ = false;
 
-    /**
-     * TTL type
-     */
-    ttl_types ttl_type_ = ttl_types::milliseconds;
+  /**
+   * TTL type
+   */
+  ttl_types ttl_type_ = ttl_types::milliseconds;
 
-    /**
-     * TTL remaining
-     */
-    value_type ttl_ = 0;
+  /**
+   * TTL remaining
+   */
+  value_type ttl_ = 0;
 
-    std::vector<std::byte> value_;
+  std::vector<std::byte> value_;
 
-    /**
-     * From buffer
-     *
-     * @param buffer
-     * @return response_query
-     */
-    static response_get from_buffer(const std::vector<std::byte>& buffer)
-    {
-        if (buffer.size() == 1 || buffer.size() > sizeof(value_type) * 2 + 1)
-        {
-            response_get _resp;
+  /**
+   * From buffer
+   *
+   * @param buffer
+   * @return response_query
+   */
+  static response_get from_buffer(const std::vector<std::byte>& buffer) {
+    if (buffer.size() == 1 || buffer.size() > sizeof(value_type) * 2 + 1) {
+      response_get _resp;
 
-            _resp.success_ = (buffer[0] == std::byte{0x01});
+      _resp.success_ = (buffer[0] == std::byte{0x01});
 
-            if (buffer.size() == 1)
-            {
-                return _resp;
-            }
-            constexpr std::size_t N = sizeof(value_type);
+      if (buffer.size() == 1) {
+        return _resp;
+      }
+      constexpr std::size_t N = sizeof(value_type);
 
-            if (buffer.size() < 1 + 1 + N + N)
-                throw response_error("response_get: buffer too small for metadata");
+      if (buffer.size() < 1 + 1 + N + N)
+        throw response_error("response_get: buffer too small for metadata");
 
-            std::size_t offset = 1;
+      std::size_t offset = 1;
 
-            // TTL Type (1 byte)
-            _resp.ttl_type_ = static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[offset]));
-            offset += 1;
+      // TTL Type (1 byte)
+      _resp.ttl_type_ =
+          static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[offset]));
+      offset += 1;
 
-            // TTL (N bytes)
-            std::memcpy(&_resp.ttl_, buffer.data() + offset, N);
-            offset += N;
+      // TTL (N bytes)
+      std::memcpy(&_resp.ttl_, buffer.data() + offset, N);
+      offset += N;
 
-            // Size (N bytes)
-            value_type size = 0;
-            std::memcpy(&size, buffer.data() + offset, N);
-            offset += N;
+      // Size (N bytes)
+      value_type size = 0;
+      std::memcpy(&size, buffer.data() + offset, N);
+      offset += N;
 
-            if (buffer.size() != offset + size)
-                throw response_error("response_get: buffer size mismatch with value length");
+      if (buffer.size() != offset + size)
+        throw response_error(
+            "response_get: buffer size mismatch with value length");
 
-            // Value (M bytes)
-            _resp.value_.resize(size);
-            std::memcpy(_resp.value_.data(), buffer.data() + offset, size);
+      // Value (M bytes)
+      _resp.value_.resize(size);
+      std::memcpy(_resp.value_.data(), buffer.data() + offset, size);
 
-            return _resp;
-        }
-        throw response_error("response_get: invalid buffer size");
+      return _resp;
     }
+    throw response_error("response_get: invalid buffer size");
+  }
 };
 
-} // namespace throttr
+}  // namespace throttr
 
-#endif // THROTTR_RESPONSE_GET_HPP
+#endif  // THROTTR_RESPONSE_GET_HPP

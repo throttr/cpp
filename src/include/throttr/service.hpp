@@ -22,163 +22,150 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <throttr/connection.hpp>
+#include <throttr/response_get.hpp>
 #include <throttr/response_query.hpp>
 #include <throttr/response_status.hpp>
-#include <throttr/response_get.hpp>
-#include <throttr/connection.hpp>
 #include <vector>
 
-namespace throttr
-{
+namespace throttr {
 /**
  * Service config
  */
-struct service_config
-{
-    std::string host_;
-    uint16_t    port_;
-    size_t      max_connections_ = 4;
+struct service_config {
+  std::string host_;
+  uint16_t port_;
+  size_t max_connections_ = 4;
 };
 
 /**
  * Service
  */
-class service
-{
-  public:
-    /**
-     * Constructor
-     *
-     * @param ex
-     * @param cfg
-     */
-    service(boost::asio::any_io_executor ex, service_config cfg)
-        : executor_(std::move(ex)), config_(std::move(cfg))
-    {
-    }
+class service {
+ public:
+  /**
+   * Constructor
+   *
+   * @param ex
+   * @param cfg
+   */
+  service(boost::asio::any_io_executor ex, service_config cfg)
+      : executor_(std::move(ex)), config_(std::move(cfg)) {}
 
-    /**
-     * Connect
-     *
-     * @param handler completion handler
-     */
-    void connect(std::function<void(boost::system::error_code)> handler)
-    {
-        auto _shared_handler =
-            std::make_shared<std::function<void(boost::system::error_code)>>(std::move(handler));
-        auto _pending    = std::make_shared<std::atomic_size_t>(config_.max_connections_);
-        auto _error_flag = std::make_shared<std::atomic_bool>(false);
+  /**
+   * Connect
+   *
+   * @param handler completion handler
+   */
+  void connect(std::function<void(boost::system::error_code)> handler) {
+    auto _shared_handler =
+        std::make_shared<std::function<void(boost::system::error_code)>>(
+            std::move(handler));
+    auto _pending =
+        std::make_shared<std::atomic_size_t>(config_.max_connections_);
+    auto _error_flag = std::make_shared<std::atomic_bool>(false);
 
-        for (std::size_t _i = 0; _i < config_.max_connections_; ++_i)
-        {
-            auto _connection =
-                std::make_shared<connection>(executor_, config_.host_, config_.port_);
-            _connection->connect(
-                [this, _connection, _pending, _shared_handler, _error_flag](
-                    boost::system::error_code ec)
-                {
-                    if (!ec && !_error_flag->load())
-                    {
-                        connections_.push_back(_connection);
-                    }
-                    else
-                    {
-                        // LCOV_EXCL_START
-                        _error_flag->store(true);
-                        // LCOV_EXCL_STOP
-                    }
-
-                    if (_pending->fetch_sub(1) == 1)
-                    {
-                        (*_shared_handler)(_error_flag->load()
-                                               ? boost::asio::error::operation_aborted
-                                               : boost::system::error_code{});
-                    }
-                });
-        }
-    }
-
-    /**
-     * Is ready
-     *
-     * @return bool
-     */
-    [[nodiscard]] bool is_ready() const
-    {
-        return !connections_.empty() && std::ranges::all_of(connections_,
-                                                            [](const std::shared_ptr<connection>& c)
-                                                            { return c && c->is_open(); });
-    }
-
-    /**
-     * Send raw
-     *
-     * @param buffer
-     * @param handler
-     */
-    void send_raw(std::vector<std::byte>                                                 buffer,
-                  std::function<void(boost::system::error_code, std::vector<std::byte>)> handler)
-    {
-        if (connections_.empty())
-        {
-            handler(make_error_code(boost::system::errc::not_connected), {});
-            return;
+    for (std::size_t _i = 0; _i < config_.max_connections_; ++_i) {
+      auto _connection =
+          std::make_shared<connection>(executor_, config_.host_, config_.port_);
+      _connection->connect([this, _connection, _pending, _shared_handler,
+                            _error_flag](boost::system::error_code ec) {
+        if (!ec && !_error_flag->load()) {
+          connections_.push_back(_connection);
+        } else {
+          // LCOV_EXCL_START
+          _error_flag->store(true);
+          // LCOV_EXCL_STOP
         }
 
-        const auto _connection = get_connection();
-        if (!_connection || !_connection->is_open())
-        {
-            // LCOV_EXCL_START
-            handler(make_error_code(boost::system::errc::connection_aborted), {});
-            return;
-            // LCOV_EXCL_STOP
+        if (_pending->fetch_sub(1) == 1) {
+          (*_shared_handler)(_error_flag->load()
+                                 ? boost::asio::error::operation_aborted
+                                 : boost::system::error_code{});
         }
+      });
+    }
+  }
 
-        _connection->send(std::move(buffer), std::move(handler));
+  /**
+   * Is ready
+   *
+   * @return bool
+   */
+  [[nodiscard]] bool is_ready() const {
+    return !connections_.empty() &&
+           std::ranges::all_of(connections_,
+                               [](const std::shared_ptr<connection>& c) {
+                                 return c && c->is_open();
+                               });
+  }
+
+  /**
+   * Send raw
+   *
+   * @param buffer
+   * @param handler
+   */
+  void send_raw(std::vector<std::byte> buffer,
+                std::function<void(boost::system::error_code,
+                                   std::vector<std::byte>)> handler) {
+    if (connections_.empty()) {
+      handler(make_error_code(boost::system::errc::not_connected), {});
+      return;
     }
 
-    /**
-     * Send typed
-     *
-     * @tparam T
-     * @param buffer
-     * @param handler
-     */
-    template <typename T>
-    void send(std::vector<std::byte>                            buffer,
-              std::function<void(boost::system::error_code, T)> handler);
-
-    /**
-     * Get connection
-     *
-     * @return
-     */
-    std::shared_ptr<connection> get_connection()
-    {
-        const auto _idx = next_connection_index_.fetch_add(1) % connections_.size();
-        return connections_[_idx];
+    const auto _connection = get_connection();
+    if (!_connection || !_connection->is_open()) {
+      // LCOV_EXCL_START
+      handler(make_error_code(boost::system::errc::connection_aborted), {});
+      return;
+      // LCOV_EXCL_STOP
     }
 
-  private:
-    /**
-     * Executor
-     */
-    boost::asio::any_io_executor executor_;
+    _connection->send(std::move(buffer), std::move(handler));
+  }
 
-    /**
-     * Config
-     */
-    service_config config_;
+  /**
+   * Send typed
+   *
+   * @tparam T
+   * @param buffer
+   * @param handler
+   */
+  template <typename T>
+  void send(std::vector<std::byte> buffer,
+            std::function<void(boost::system::error_code, T)> handler);
 
-    /**
-     * Round-robin index
-     */
-    std::atomic<std::size_t> next_connection_index_{0};
+  /**
+   * Get connection
+   *
+   * @return
+   */
+  std::shared_ptr<connection> get_connection() {
+    const auto _idx = next_connection_index_.fetch_add(1) % connections_.size();
+    return connections_[_idx];
+  }
 
-    /**
-     * Connections
-     */
-    std::vector<std::shared_ptr<connection>> connections_;
+ private:
+  /**
+   * Executor
+   */
+  boost::asio::any_io_executor executor_;
+
+  /**
+   * Config
+   */
+  service_config config_;
+
+  /**
+   * Round-robin index
+   */
+  std::atomic<std::size_t> next_connection_index_{0};
+
+  /**
+   * Connections
+   */
+  std::vector<std::shared_ptr<connection>> connections_;
 };
 
 /**
@@ -188,16 +175,14 @@ class service
  */
 template <>
 inline void service::send<response_status>(
-    std::vector<std::byte>                                          buffer,
-    std::function<void(boost::system::error_code, response_status)> handler)
-{
-    send_raw(std::move(buffer),
-             [_final_handler = std::move(handler)](auto ec, const auto& data) mutable
-             {
-                 if (ec)
-                     return _final_handler(ec, {});
-                 _final_handler({}, response_status::from_buffer(data));
-             });
+    std::vector<std::byte> buffer,
+    std::function<void(boost::system::error_code, response_status)> handler) {
+  send_raw(std::move(buffer), [_final_handler = std::move(handler)](
+                                  auto ec, const auto& data) mutable {
+    if (ec)
+      return _final_handler(ec, {});
+    _final_handler({}, response_status::from_buffer(data));
+  });
 }
 
 /**
@@ -207,16 +192,14 @@ inline void service::send<response_status>(
  */
 template <>
 inline void service::send<response_query>(
-    std::vector<std::byte>                                         buffer,
-    std::function<void(boost::system::error_code, response_query)> handler)
-{
-    send_raw(std::move(buffer),
-             [_final_handler = std::move(handler)](auto ec, const auto& data) mutable
-             {
-                 if (ec)
-                     return _final_handler(ec, {});
-                 _final_handler({}, response_query::from_buffer(data));
-             });
+    std::vector<std::byte> buffer,
+    std::function<void(boost::system::error_code, response_query)> handler) {
+  send_raw(std::move(buffer), [_final_handler = std::move(handler)](
+                                  auto ec, const auto& data) mutable {
+    if (ec)
+      return _final_handler(ec, {});
+    _final_handler({}, response_query::from_buffer(data));
+  });
 }
 
 /**
@@ -225,19 +208,17 @@ inline void service::send<response_query>(
  * @return void
  */
 template <>
-inline void
-service::send<response_get>(std::vector<std::byte>                                       buffer,
-                            std::function<void(boost::system::error_code, response_get)> handler)
-{
-    send_raw(std::move(buffer),
-             [_final_handler = std::move(handler)](auto ec, const auto& data) mutable
-             {
-                 if (ec)
-                     return _final_handler(ec, {});
-                 _final_handler({}, response_get::from_buffer(data));
-             });
+inline void service::send<response_get>(
+    std::vector<std::byte> buffer,
+    std::function<void(boost::system::error_code, response_get)> handler) {
+  send_raw(std::move(buffer), [_final_handler = std::move(handler)](
+                                  auto ec, const auto& data) mutable {
+    if (ec)
+      return _final_handler(ec, {});
+    _final_handler({}, response_get::from_buffer(data));
+  });
 }
 
-} // namespace throttr
+}  // namespace throttr
 
-#endif // THROTTR_SERVICE_HPP
+#endif  // THROTTR_SERVICE_HPP

@@ -1,45 +1,53 @@
 ---
-BasedOnStyle: LLVM
-IndentWidth: 4
-TabWidth: 4
+Language: Cpp
+
+# Sangrías
+IndentWidth: 2
+ObjCBlockIndentWidth: 2
+ContinuationIndentWidth: 2
+IndentCaseLabels: true
 UseTab: Never
-ColumnLimit: 100
+NamespaceIndentation: All
 
-BreakBeforeBraces: Allman
-AllowShortBlocksOnASingleLine: false
-AllowShortIfStatementsOnASingleLine: false
-AllowShortLoopsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: InlineOnly
+# Columnas
+ColumnLimit: 130
+PenaltyBreakBeforeFirstCallParameter: 1000
+PenaltyReturnTypeOnItsOwnLine: 200
 
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
-AlignTrailingComments: true
-AlignOperands: true
-
-PointerAlignment: Left
-SpaceBeforeParens: ControlStatements
-SpacesInParentheses: false
-SpacesInSquareBrackets: false
-SpaceInEmptyParentheses: false
-
+# Declaraciones y llamadas
 BinPackArguments: false
 BinPackParameters: false
-CompactNamespaces: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AlignAfterOpenBracket: AlwaysBreak
+AlwaysBreakAfterReturnType: TopLevel
+AllowShortBlocksOnASingleLine: Always
+AllowShortFunctionsOnASingleLine: None
 
-# Esto evita que formatee las lambdas como árbol genealógico
-BreakBeforeBinaryOperators: None
-PenaltyBreakBeforeFirstCallParameter: 0
-PenaltyBreakComment: 60
-PenaltyBreakString: 60
-PenaltyExcessCharacter: 100
-PenaltyReturnTypeOnItsOwnLine: 100
+# Inicializadores
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+BreakConstructorInitializers: AfterColon
 
-# No empieces a alinear argumentos verticalmente como Excel
-AlwaysBreakAfterReturnType: None
-AlwaysBreakTemplateDeclarations: Yes
-AllowAllArgumentsOnNextLine: true
+# Llaves
+BreakBeforeBraces: Allman
+BraceWrapping:
+  AfterFunction: false
+  AfterClass: false
+  AfterStruct: false
+  AfterNamespace: false
+  BeforeElse: false
+  BeforeCatch: false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
 
-# Incluye cosas útiles
-IncludeBlocks: Preserve
-SortIncludes: false
-SortUsingDeclarations: false
+# Espaciado
+SpaceAfterCStyleCast: true
+SpaceAfterTemplateKeyword: false
+SpacesInParentheses: false
+SpacesInConditionalStatement: false
+SpaceInEmptyParentheses: false
+SpacesInCStyleCastParentheses: false
+
+# Extras
+InsertNewlineAtEOF: true
+MaxEmptyLinesToKeep: 1

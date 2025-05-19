@@ -23,63 +23,59 @@
 #include <throttr/protocol_wrapper.hpp>
 #include <vector>
 
-namespace throttr
-{
+namespace throttr {
 /**
  * Response query
  */
-struct response_query
-{
-    /**
-     * Success
-     */
-    bool success_ = false;
+struct response_query {
+  /**
+   * Success
+   */
+  bool success_ = false;
 
-    /**
-     * Quota remaining
-     */
-    value_type quota_ = 0;
+  /**
+   * Quota remaining
+   */
+  value_type quota_ = 0;
 
-    /**
-     * TTL type
-     */
-    ttl_types ttl_type_ = ttl_types::milliseconds;
+  /**
+   * TTL type
+   */
+  ttl_types ttl_type_ = ttl_types::milliseconds;
 
-    /**
-     * TTL remaining
-     */
-    value_type ttl_ = 0;
+  /**
+   * TTL remaining
+   */
+  value_type ttl_ = 0;
 
-    /**
-     * From buffer
-     *
-     * @param buffer
-     * @return response_query
-     */
-    static response_query from_buffer(const std::vector<std::byte>& buffer)
-    {
-        if (buffer.size() == 1 || buffer.size() == sizeof(value_type) * 2 + 2)
-        {
-            response_query _resp;
+  /**
+   * From buffer
+   *
+   * @param buffer
+   * @return response_query
+   */
+  static response_query from_buffer(const std::vector<std::byte>& buffer) {
+    if (buffer.size() == 1 || buffer.size() == sizeof(value_type) * 2 + 2) {
+      response_query _resp;
 
-            _resp.success_ = (buffer[0] == std::byte{0x01});
+      _resp.success_ = (buffer[0] == std::byte{0x01});
 
-            if (buffer.size() == 1)
-            {
-                return _resp;
-            }
+      if (buffer.size() == 1) {
+        return _resp;
+      }
 
-            std::memcpy(&_resp.quota_, buffer.data() + 1, sizeof(value_type));
-            _resp.ttl_type_ =
-                static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[1 + sizeof(value_type)]));
-            std::memcpy(&_resp.ttl_, buffer.data() + sizeof(value_type) + 2, sizeof(value_type));
+      std::memcpy(&_resp.quota_, buffer.data() + 1, sizeof(value_type));
+      _resp.ttl_type_ = static_cast<ttl_types>(
+          std::to_integer<uint8_t>(buffer[1 + sizeof(value_type)]));
+      std::memcpy(&_resp.ttl_, buffer.data() + sizeof(value_type) + 2,
+                  sizeof(value_type));
 
-            return _resp;
-        }
-        throw response_error("response_query: invalid buffer size");
+      return _resp;
     }
+    throw response_error("response_query: invalid buffer size");
+  }
 };
 
-} // namespace throttr
+}  // namespace throttr
 
-#endif // THROTTR_RESPONSE_QUERY_HPP
+#endif  // THROTTR_RESPONSE_QUERY_HPP

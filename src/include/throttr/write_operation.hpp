@@ -20,23 +20,22 @@
 #include <future>
 #include <vector>
 
-namespace throttr
-{
+namespace throttr {
 /**
  * Write
  */
-struct write_operation
-{
-    /**
-     * Buffer
-     */
-    std::vector<std::byte> buffer_;
+struct write_operation {
+  /**
+   * Buffer
+   */
+  std::vector<std::byte> buffer_;
 
-    /**
-     * Promise
-     */
-    std::function<void(boost::system::error_code, std::vector<std::byte>)> handler;
+  /**
+   * Promise
+   */
+  std::function<void(boost::system::error_code, std::vector<std::byte>)>
+      handler;
 };
-} // namespace throttr
+}  // namespace throttr
 
-#endif // THROTTR_WRITE_OPERATION_HPP
+#endif  // THROTTR_WRITE_OPERATION_HPP

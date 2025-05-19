@@ -21,34 +21,30 @@
 #include <throttr/exception.hpp>
 #include <vector>
 
-namespace throttr
-{
+namespace throttr {
 /**
  * Response status
  */
-struct response_status
-{
-    /**
-     * Success
-     */
-    bool success_ = false;
+struct response_status {
+  /**
+   * Success
+   */
+  bool success_ = false;
 
-    /**
-     * From buffer
-     *
-     * @param buffer
-     * @return response_status
-     */
-    static response_status from_buffer(const std::vector<std::byte>& buffer)
-    {
-        if (buffer.size() != 1)
-        {
-            throw response_error("response_status: invalid buffer size");
-        }
-
-        return response_status{.success_ = (buffer[0] == std::byte{0x01})};
+  /**
+   * From buffer
+   *
+   * @param buffer
+   * @return response_status
+   */
+  static response_status from_buffer(const std::vector<std::byte>& buffer) {
+    if (buffer.size() != 1) {
+      throw response_error("response_status: invalid buffer size");
     }
-};
-} // namespace throttr
 
-#endif // THROTTR_RESPONSE_STATUS_HPP
+    return response_status{.success_ = (buffer[0] == std::byte{0x01})};
+  }
+};
+}  // namespace throttr
+
+#endif  // THROTTR_RESPONSE_STATUS_HPP

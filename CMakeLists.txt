@@ -42,9 +42,9 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(throttr-protocol)
 
 include_directories(src/include)
-file(GLOB_RECURSE SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+file(GLOB_RECURSE HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp")
 
-add_library(throttr-sdk STATIC ${HEADERS} ${SOURCES})
+add_library(throttr-sdk STATIC ${HEADERS})
 
 target_include_directories(throttr-sdk
         PUBLIC

@@ -24,17 +24,12 @@
 #include <string>
 #include <throttr/response_query.hpp>
 #include <throttr/response_status.hpp>
+#include <throttr/response_get.hpp>
+#include <throttr/connection.hpp>
 #include <vector>
-
-#include "response_get.hpp"
 
 namespace throttr
 {
-/**
- * Forward connection
- */
-class connection;
-
 /**
  * Service config
  */
@@ -57,21 +52,59 @@ class service
      * @param ex
      * @param cfg
      */
-    service(boost::asio::any_io_executor ex, service_config cfg);
+    service(boost::asio::any_io_executor ex, service_config cfg)
+    : executor_(std::move(ex)), config_(std::move(cfg))
+    {
+    }
 
     /**
      * Connect
      *
      * @param handler completion handler
      */
-    void connect(std::function<void(boost::system::error_code)> handler);
+    void connect(std::function<void(boost::system::error_code)> handler) {
+        auto _shared_handler =
+            std::make_shared<std::function<void(boost::system::error_code)>>(std::move(handler));
+        auto _pending    = std::make_shared<std::atomic_size_t>(config_.max_connections_);
+        auto _error_flag = std::make_shared<std::atomic_bool>(false);
+
+        for (std::size_t _i = 0; _i < config_.max_connections_; ++_i)
+        {
+            auto _connection = std::make_shared<connection>(executor_, config_.host_, config_.port_);
+            _connection->connect(
+                [this, _connection, _pending, _shared_handler, _error_flag](
+                    boost::system::error_code ec)
+                {
+                    if (!ec && !_error_flag->load())
+                    {
+                        connections_.push_back(_connection);
+                    }
+                    else
+                    {
+                        // LCOV_EXCL_START
+                        _error_flag->store(true);
+                        // LCOV_EXCL_STOP
+                    }
+
+                    if (_pending->fetch_sub(1) == 1)
+                    {
+                        (*_shared_handler)(_error_flag->load() ? boost::asio::error::operation_aborted
+                                                               : boost::system::error_code{});
+                    }
+                });
+        }
+    }
 
     /**
      * Is ready
      *
      * @return bool
      */
-    [[nodiscard]] bool is_ready() const;
+    [[nodiscard]] bool is_ready() const {
+        return !connections_.empty() && std::ranges::all_of(connections_,
+                                                            [](const std::shared_ptr<connection>& c)
+                                                            { return c && c->is_open(); });
+    }
 
     /**
      * Send raw
@@ -80,7 +113,25 @@ class service
      * @param handler
      */
     void send_raw(std::vector<std::byte>                                                 buffer,
-                  std::function<void(boost::system::error_code, std::vector<std::byte>)> handler);
+                  std::function<void(boost::system::error_code, std::vector<std::byte>)> handler)
+    {
+        if (connections_.empty())
+        {
+            handler(make_error_code(boost::system::errc::not_connected), {});
+            return;
+        }
+
+        const auto _connection = get_connection();
+        if (!_connection || !_connection->is_open())
+        {
+            // LCOV_EXCL_START
+            handler(make_error_code(boost::system::errc::connection_aborted), {});
+            return;
+            // LCOV_EXCL_STOP
+        }
+
+        _connection->send(std::move(buffer), std::move(handler));
+    }
 
     /**
      * Send typed
@@ -98,7 +149,10 @@ class service
      *
      * @return
      */
-    std::shared_ptr<connection> get_connection();
+    std::shared_ptr<connection> get_connection() {
+        const auto _idx = next_connection_index_.fetch_add(1) % connections_.size();
+        return connections_[_idx];
+    }
 
   private:
     /**

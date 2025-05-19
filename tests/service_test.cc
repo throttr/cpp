@@ -186,7 +186,7 @@ TEST_F(ServiceTestFixture, SetThenGetFinallyPurge) {
                                        finished = true;
 
                                        svc_->send<response_status>(request_purge_builder(key),
-                                           [&](const boost::system::error_code &ec2, const response_status purge_response) {
+                                           [](const boost::system::error_code &ec2, const response_status purge_response) {
                                                ASSERT_FALSE(ec2);
                                                EXPECT_TRUE(purge_response.success_);
                                            });

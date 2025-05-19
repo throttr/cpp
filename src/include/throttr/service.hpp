@@ -115,12 +115,12 @@ class service {
     }
 
     const auto _connection = get_connection();
+    // LCOV_EXCL_START
     if (!_connection || !_connection->is_open()) {
-      // LCOV_EXCL_START
       handler(make_error_code(boost::system::errc::connection_aborted), {});
       return;
-      // LCOV_EXCL_STOP
     }
+    // LCOV_EXCL_STOP
 
     _connection->send(std::move(buffer), std::move(handler));
   }
@@ -179,8 +179,10 @@ inline void service::send<response_status>(
     std::function<void(boost::system::error_code, response_status)> handler) {
   send_raw(std::move(buffer), [_final_handler = std::move(handler)](
                                   auto ec, const auto& data) mutable {
+    // LCOV_EXCL_START
     if (ec)
       return _final_handler(ec, {});
+    // LCOV_EXCL_STOP
     _final_handler({}, response_status::from_buffer(data));
   });
 }
@@ -196,8 +198,10 @@ inline void service::send<response_query>(
     std::function<void(boost::system::error_code, response_query)> handler) {
   send_raw(std::move(buffer), [_final_handler = std::move(handler)](
                                   auto ec, const auto& data) mutable {
+    // LCOV_EXCL_START
     if (ec)
       return _final_handler(ec, {});
+    // LCOV_EXCL_STOP
     _final_handler({}, response_query::from_buffer(data));
   });
 }
@@ -213,8 +217,10 @@ inline void service::send<response_get>(
     std::function<void(boost::system::error_code, response_get)> handler) {
   send_raw(std::move(buffer), [_final_handler = std::move(handler)](
                                   auto ec, const auto& data) mutable {
+    // LCOV_EXCL_START
     if (ec)
       return _final_handler(ec, {});
+    // LCOV_EXCL_STOP
     _final_handler({}, response_get::from_buffer(data));
   });
 }

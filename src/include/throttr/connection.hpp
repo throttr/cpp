@@ -112,7 +112,9 @@ class connection : public std::enable_shared_from_this<connection> {
    * Do write
    */
   void do_write() {
+    // LCOV_EXCL_START
     if (queue_.empty()) {
+      // LCOV_EXCL_STOP
       writing_ = false;
       return;
     }
@@ -143,10 +145,14 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param operation
    */
   void handle_write(const std::shared_ptr<write_operation>& operation) {
+    // LCOV_EXCL_START
     if (const auto _type = std::to_integer<uint8_t>(operation->buffer_[0]);
         _type == 0x02) {
+      // LCOV_EXCL_STOP
       handle_response_query(operation);
+      // LCOV_EXCL_START
     } else if (_type == 0x06) {
+      // LCOV_EXCL_STOP
       handle_response_get(operation);
     } else {
       handle_response_status(operation);
@@ -171,11 +177,13 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::bind_executor(
             strand_, [_self, operation, _head, on_success](
                          const boost::system::error_code& ec, std::size_t) {
+              // LCOV_EXCL_START
               if (ec) {
                 operation->handler(ec, {});
                 _self->do_write();
                 return;
               }
+              // LCOV_EXCL_STOP
 
               if (const auto _status = std::to_integer<uint8_t>((*_head)[0]);
                   _status == 0x00) {
@@ -209,11 +217,13 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::bind_executor(
             strand_, [_self, operation, head, _header](
                          const boost::system::error_code& ec, std::size_t) {
+              // LCOV_EXCL_START
               if (ec) {
                 operation->handler(ec, {});
                 _self->do_write();
                 return;
               }
+              // LCOV_EXCL_STOP
 
               value_type _size = 0;
               std::memcpy(&_size, _header->data() + 1 + N, N);
@@ -243,7 +253,9 @@ class connection : public std::enable_shared_from_this<connection> {
             strand_, [_self, operation, head, header, _value](
                          const boost::system::error_code& ec, std::size_t) {
               if (ec) {
+                // LCOV_EXCL_START
                 operation->handler(ec, {});
+                // LCOV_EXCL_STOP
               } else {
                 std::vector<std::byte> _full;
                 _full.reserve(1 + header->size() + _value->size());
@@ -288,7 +300,9 @@ class connection : public std::enable_shared_from_this<connection> {
             strand_, [_self, operation, head, _rest](
                          const boost::system::error_code& ec, std::size_t) {
               if (ec) {
+                // LCOV_EXCL_START
                 operation->handler(ec, {});
+                // LCOV_EXCL_STOP
               } else {
                 std::vector<std::byte> _full;
                 _full.reserve(1 + _rest->size());

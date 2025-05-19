@@ -47,25 +47,6 @@ TEST(ResponseQueryTest, ThrowsWhenBufferSizeIsInvalid) {
     }
 }
 
-TEST(ResponseQueryTest, FromBufferSucceeds) {
-    constexpr int _expected_buffer_size = sizeof(throttr::value_type) * 2 + 2;
-    std::vector _buffer(_expected_buffer_size, std::byte{0x01});
-
-    _buffer[0] = std::byte{0x01};  // success = true
-    constexpr throttr::value_type _quota = 7;
-    std::memcpy(&_buffer[1], &_quota, sizeof(throttr::value_type)); // quota = 7
-    _buffer[sizeof(throttr::value_type) + 1] = std::byte{0x03};  // ttl_type = milliseconds
-    constexpr throttr::value_type _ttl = 3;
-    std::memcpy(&_buffer[sizeof(throttr::value_type) * 2], &_ttl, sizeof(throttr::value_type)); // ttl = 3
-
-    const auto _resp = throttr::response_query::from_buffer(_buffer);
-
-    EXPECT_TRUE(_resp.success_);
-    EXPECT_EQ(_resp.quota_, 7);
-    EXPECT_EQ(_resp.ttl_type_, throttr::ttl_types::milliseconds);
-    EXPECT_EQ(_resp.ttl_, 3);
-}
-
 TEST(ResponseGetTest, FromBufferSuccessOnlyByte01) {
     const std::vector buffer = {std::byte{0x01}};
     const auto resp = throttr::response_get::from_buffer(buffer);

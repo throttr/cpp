@@ -65,10 +65,8 @@ struct response_query {
       }
 
       std::memcpy(&_resp.quota_, buffer.data() + 1, sizeof(value_type));
-      _resp.ttl_type_ = static_cast<ttl_types>(
-          std::to_integer<uint8_t>(buffer[1 + sizeof(value_type)]));
-      std::memcpy(&_resp.ttl_, buffer.data() + sizeof(value_type) + 2,
-                  sizeof(value_type));
+      _resp.ttl_type_ = static_cast<ttl_types>(std::to_integer<uint8_t>(buffer[1 + sizeof(value_type)]));
+      std::memcpy(&_resp.ttl_, buffer.data() + sizeof(value_type) + 2, sizeof(value_type));
 
       return _resp;
     }

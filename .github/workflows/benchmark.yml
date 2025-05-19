@@ -9,7 +9,7 @@ jobs:
 
     strategy:
       matrix:
-        size: [uint8, uint16, uint32, uint64]
+        size: [UINT8, UINT16, UINT32, UINT64]
 
 
     services:

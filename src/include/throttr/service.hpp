@@ -16,135 +16,168 @@
 #ifndef THROTTR_SERVICE_HPP
 #define THROTTR_SERVICE_HPP
 
-#include <throttr/response_status.hpp>
-#include <throttr/response_query.hpp>
-
-#include <vector>
 #include <atomic>
-#include <string>
-#include <memory>
-#include <functional>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <functional>
+#include <memory>
+#include <string>
+#include <throttr/response_query.hpp>
+#include <throttr/response_status.hpp>
+#include <vector>
 
-namespace throttr {
+#include "response_get.hpp"
+
+namespace throttr
+{
+/**
+ * Forward connection
+ */
+class connection;
+
+/**
+ * Service config
+ */
+struct service_config
+{
+    std::string host_;
+    uint16_t    port_;
+    size_t      max_connections_ = 4;
+};
+
+/**
+ * Service
+ */
+class service
+{
+  public:
     /**
-     * Forward connection
-     */
-    class connection;
-
-    /**
-     * Service config
-     */
-    struct service_config {
-        std::string host_;
-        uint16_t port_;
-        size_t max_connections_ = 4;
-    };
-
-    /**
-     * Service
-     */
-    class service {
-    public:
-        /**
-         * Constructor
-         *
-         * @param ex
-         * @param cfg
-         */
-        service(boost::asio::any_io_executor ex, service_config cfg);
-
-        /**
-         * Connect
-         *
-         * @param handler completion handler
-         */
-        void connect(std::function<void(boost::system::error_code)> handler);
-
-        /**
-         * Is ready
-         *
-         * @return bool
-         */
-        [[nodiscard]] bool is_ready() const;
-
-        /**
-         * Send raw
-         *
-         * @param buffer
-         * @param handler
-         */
-        void send_raw(std::vector<std::byte> buffer,
-                      std::function<void(boost::system::error_code, std::vector<std::byte>)> handler);
-
-        /**
-         * Send typed
-         *
-         * @tparam T
-         * @param buffer
-         * @param handler
-         */
-        template<typename T>
-        void send(std::vector<std::byte> buffer,
-                  std::function<void(boost::system::error_code, T)> handler);
-
-        /**
-         * Get connection
-         *
-         * @return
-         */
-        std::shared_ptr<connection> get_connection();
-
-    private:
-        /**
-         * Executor
-         */
-        boost::asio::any_io_executor executor_;
-
-        /**
-         * Config
-         */
-        service_config config_;
-
-        /**
-         * Round-robin index
-         */
-        std::atomic<std::size_t> next_connection_index_{0};
-
-        /**
-         * Connections
-         */
-        std::vector<std::shared_ptr<connection>> connections_;
-    };
-
-    /**
-     * Send implements T as response_simple
+     * Constructor
      *
-     * @return void
+     * @param ex
+     * @param cfg
      */
-    template<>
-    inline void service::send<response_status>(std::vector<std::byte> buffer,
-                                               std::function<void(boost::system::error_code, response_status)> handler) {
-        send_raw(std::move(buffer), [_final_handler = std::move(handler)](auto ec, const auto& data) mutable {
-            if (ec) return _final_handler(ec, {});
-            _final_handler({}, response_status::from_buffer(data));
-        });
-    }
+    service(boost::asio::any_io_executor ex, service_config cfg);
 
     /**
-     * Send implements T as response_full
+     * Connect
      *
-     * @return void
+     * @param handler completion handler
      */
-    template<>
-    inline void service::send<response_query>(std::vector<std::byte> buffer,
-                                             std::function<void(boost::system::error_code, response_query)> handler) {
-        send_raw(std::move(buffer), [_final_handler = std::move(handler)](auto ec, auto data) mutable {
-            if (ec) return _final_handler(ec, {});
-            _final_handler({}, response_query::from_buffer(data));
-        });
-    }
+    void connect(std::function<void(boost::system::error_code)> handler);
+
+    /**
+     * Is ready
+     *
+     * @return bool
+     */
+    [[nodiscard]] bool is_ready() const;
+
+    /**
+     * Send raw
+     *
+     * @param buffer
+     * @param handler
+     */
+    void send_raw(std::vector<std::byte>                                                 buffer,
+                  std::function<void(boost::system::error_code, std::vector<std::byte>)> handler);
+
+    /**
+     * Send typed
+     *
+     * @tparam T
+     * @param buffer
+     * @param handler
+     */
+    template <typename T>
+    void send(std::vector<std::byte>                            buffer,
+              std::function<void(boost::system::error_code, T)> handler);
+
+    /**
+     * Get connection
+     *
+     * @return
+     */
+    std::shared_ptr<connection> get_connection();
+
+  private:
+    /**
+     * Executor
+     */
+    boost::asio::any_io_executor executor_;
+
+    /**
+     * Config
+     */
+    service_config config_;
+
+    /**
+     * Round-robin index
+     */
+    std::atomic<std::size_t> next_connection_index_{0};
+
+    /**
+     * Connections
+     */
+    std::vector<std::shared_ptr<connection>> connections_;
+};
+
+/**
+ * Send implements T as response_status
+ *
+ * @return void
+ */
+template <>
+inline void service::send<response_status>(
+    std::vector<std::byte>                                          buffer,
+    std::function<void(boost::system::error_code, response_status)> handler)
+{
+    send_raw(std::move(buffer),
+             [_final_handler = std::move(handler)](auto ec, const auto& data) mutable
+             {
+                 if (ec)
+                     return _final_handler(ec, {});
+                 _final_handler({}, response_status::from_buffer(data));
+             });
+}
+
+/**
+ * Send implements T as response_status
+ *
+ * @return void
+ */
+template <>
+inline void service::send<response_query>(
+    std::vector<std::byte>                                         buffer,
+    std::function<void(boost::system::error_code, response_query)> handler)
+{
+    send_raw(std::move(buffer),
+             [_final_handler = std::move(handler)](auto ec, const auto& data) mutable
+             {
+                 if (ec)
+                     return _final_handler(ec, {});
+                 _final_handler({}, response_query::from_buffer(data));
+             });
+}
+
+/**
+ * Send implements T as response_get
+ *
+ * @return void
+ */
+template <>
+inline void
+service::send<response_get>(std::vector<std::byte>                                       buffer,
+                            std::function<void(boost::system::error_code, response_get)> handler)
+{
+    send_raw(std::move(buffer),
+             [_final_handler = std::move(handler)](auto ec, const auto& data) mutable
+             {
+                 if (ec)
+                     return _final_handler(ec, {});
+                 _final_handler({}, response_get::from_buffer(data));
+             });
+}
 
 } // namespace throttr
 

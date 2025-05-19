@@ -1,0 +1,45 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+BreakBeforeBraces: Allman
+AllowShortBlocksOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: InlineOnly
+
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignTrailingComments: true
+AlignOperands: true
+
+PointerAlignment: Left
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpaceInEmptyParentheses: false
+
+BinPackArguments: false
+BinPackParameters: false
+CompactNamespaces: false
+
+# Esto evita que formatee las lambdas como árbol genealógico
+BreakBeforeBinaryOperators: None
+PenaltyBreakBeforeFirstCallParameter: 0
+PenaltyBreakComment: 60
+PenaltyBreakString: 60
+PenaltyExcessCharacter: 100
+PenaltyReturnTypeOnItsOwnLine: 100
+
+# No empieces a alinear argumentos verticalmente como Excel
+AlwaysBreakAfterReturnType: None
+AlwaysBreakTemplateDeclarations: Yes
+AllowAllArgumentsOnNextLine: true
+
+# Incluye cosas útiles
+IncludeBlocks: Preserve
+SortIncludes: false
+SortUsingDeclarations: false

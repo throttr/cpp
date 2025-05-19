@@ -17,6 +17,7 @@
 #include <throttr/service.hpp>
 #include <throttr/response_status.hpp>
 #include <throttr/response_query.hpp>
+#include <throttr/response_get.hpp>
 #include <throttr/protocol.hpp>
 #include <throttr/connection.hpp>
 
@@ -155,6 +156,41 @@ TEST_F(ServiceTestFixture, PurgeThenQuery) {
                             finished = true;
                         });
                 });
+        });
+
+    io_.run();
+    ASSERT_TRUE(finished);
+}
+
+TEST_F(ServiceTestFixture, SetThenGetFinallyPurge) {
+    const std::string key = "user:set|/api/set";
+    bool finished = false;
+    const std::vector _buffer = {
+        std::byte{'E'}, std::byte{'H'}, std::byte{'L'}, std::byte{'O'}
+    };
+
+    svc_->send<response_status>(request_set_builder(_buffer, ttl_types::seconds, 5, key),
+        [&](const boost::system::error_code &ec, response_status) {
+            ASSERT_FALSE(ec);
+
+            svc_->send<response_get>(request_get_builder(key),
+                                   [&](const boost::system::error_code &ec3, const response_get &get_result) {
+                                       ASSERT_FALSE(ec3);
+                                       EXPECT_TRUE(get_result.success_);
+
+                                       EXPECT_EQ(get_result.value_[0], std::byte{0x45});
+                                       EXPECT_EQ(get_result.value_[1], std::byte{0x48});
+                                       EXPECT_EQ(get_result.value_[2], std::byte{0x4C});
+                                       EXPECT_EQ(get_result.value_[3], std::byte{0x4F});
+                                       EXPECT_EQ(get_result.value_.size(), 4);
+                                       finished = true;
+
+                                       svc_->send<response_status>(request_purge_builder(key),
+                                           [&](const boost::system::error_code &ec2, const response_status purge_response) {
+                                               ASSERT_FALSE(ec2);
+                                               EXPECT_TRUE(purge_response.success_);
+                                           });
+                                   });
         });
 
     io_.run();

@@ -16,25 +16,27 @@
 #ifndef THROTTR_WRITE_OPERATION_HPP
 #define THROTTR_WRITE_OPERATION_HPP
 
-#include <vector>
-#include <future>
 #include <boost/system.hpp>
+#include <future>
+#include <vector>
 
-namespace throttr {
+namespace throttr
+{
+/**
+ * Write
+ */
+struct write_operation
+{
     /**
-     * Write
+     * Buffer
      */
-    struct write_operation {
-        /**
-         * Buffer
-         */
-        std::vector<std::byte> buffer_;
+    std::vector<std::byte> buffer_;
 
-        /**
-         * Promise
-         */
-        std::function<void(boost::system::error_code, std::vector<std::byte>)> handler;
-    };
-}
+    /**
+     * Promise
+     */
+    std::function<void(boost::system::error_code, std::vector<std::byte>)> handler;
+};
+} // namespace throttr
 
 #endif // THROTTR_WRITE_OPERATION_HPP

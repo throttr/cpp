@@ -18,20 +18,23 @@
 
 #include <stdexcept>
 
-namespace throttr {
-    /**
-     * Response error
-     */
-    struct response_error final : std::runtime_error {
-        using runtime_error::runtime_error;
-    };
+namespace throttr
+{
+/**
+ * Response error
+ */
+struct response_error final : std::runtime_error
+{
+    using runtime_error::runtime_error;
+};
 
-    /**
-     * Service error
-     */
-    struct service_error final : std::runtime_error {
-        using runtime_error::runtime_error;
-    };
-}
+/**
+ * Service error
+ */
+struct service_error final : std::runtime_error
+{
+    using runtime_error::runtime_error;
+};
+} // namespace throttr
 
 #endif // THROTTR_EXCEPTION_HPP

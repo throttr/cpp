@@ -6,9 +6,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    strategy:
+      matrix:
+        size: [UINT8, UINT16, UINT32, UINT64]
+
     services:
       throttr:
-        image: ghcr.io/throttr/throttr:2.1.1-release
+        image: ghcr.io/throttr/throttr:4.0.14-debug-${{ matrix.size }}
         ports:
           - 9000:9000
 
@@ -21,7 +25,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_SDK_TESTS=ON -DBUILD_SDK_BENCHMARK=OFF
+          cmake .. -DCMAKE_BUILD_TYPE=Debug -DBUILD_SDK_TESTS=ON -DBUILD_SDK_BENCHMARK=OFF -DRUNTIME_VALUE_SIZE=${{ matrix.size }}
           make -j4
           
           for i in {1..10}; do
@@ -39,6 +43,7 @@ jobs:
           gcovr --filter='src/' --print-summary --sort-percentage
 
       - name: Upload coverage reports to Codecov
+        if: ${{ matrix.size == 'UINT16' }}
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -13,29 +13,22 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#ifndef THROTTR_WRITE_OPERATION_HPP
-#define THROTTR_WRITE_OPERATION_HPP
+#ifndef THROTTR_PROTOCOL_WRAPPER_HPP
+#define THROTTR_PROTOCOL_WRAPPER_HPP
 
-#include <boost/system.hpp>
-#include <future>
-#include <vector>
-
-namespace throttr {
 /**
- * Write
+ * This rewrites the size of Quota and TTL.
  */
-struct write_operation {
-  /**
-   * Buffer
-   */
-  std::vector<std::byte> buffer_;
+#if defined(THROTTR_VALUE_SIZE_UINT8)
+#define THROTTR_VALUE_SIZE uint8_t
+#elif defined(THROTTR_VALUE_SIZE_UINT16)
+#define THROTTR_VALUE_SIZE uint16_t
+#elif defined(THROTTR_VALUE_SIZE_UINT32)
+#define THROTTR_VALUE_SIZE uint32_t
+#elif defined(THROTTR_VALUE_SIZE_UINT64)
+#define THROTTR_VALUE_SIZE uint64_t
+#endif
 
-  /**
-   * Promise
-   */
-  std::function<void(boost::system::error_code, std::vector<std::byte>)>
-      handler;
-};
-}  // namespace throttr
+#include <throttr/protocol.hpp>
 
-#endif  // THROTTR_WRITE_OPERATION_HPP
+#endif  // THROTTR_PROTOCOL_WRAPPER_HPP

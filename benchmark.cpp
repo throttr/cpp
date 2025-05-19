@@ -14,11 +14,12 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include <throttr/service.hpp>
-#include <throttr/response_simple.hpp>
-#include <throttr/response_full.hpp>
-#include <throttr/protocol.hpp>
+#include <throttr/response_status.hpp>
+#include <throttr/response_query.hpp>
+#include <throttr/protocol_wrapper.hpp>
 
 #include <boost/asio/io_context.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <boost/asio/post.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <iostream>
@@ -36,7 +37,7 @@ int main() {
     service svc(io.get_executor(), cfg);
 
     bool ready = false;
-    svc.connect([&](boost::system::error_code ec) { // NOSONAR
+    svc.connect([&](const boost::system::error_code &ec) { // NOSONAR
         if (ec) {
             std::cerr << "Connection error: " << ec.message() << "\n";
             return;
@@ -47,25 +48,26 @@ int main() {
     while (!ready) io.run_one();
     io.restart();
 
-    constexpr int total = 100'000;
-    const std::string resource = "resource";
-    const std::string consumer = "consumer";
-    auto buffer = request_insert_builder(100000, 1, ttl_types::seconds, 10, consumer, resource);
+    constexpr int total = 100;
+    const std::string key = "resource|consumer";
+    auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);
     for (int i = 0; i < total; ++i) {
         post(io, [&, buffer]() {
-            svc.send<response_full>(buffer, [&](boost::system::error_code ec, response_full res) {
-                // This scope doesn't requires operations
+            svc.send<response_status>(buffer, [](boost::system::error_code ec, response_status res) {
+                boost::ignore_unused(ec, res);
             });
         });
     }
 
     const auto start = std::chrono::steady_clock::now();
+    std::puts("Running ...");
     io.run();
+    std::puts("Ran ...");
     const auto end = std::chrono::steady_clock::now();
     const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    std::cout << "100.000 insert has been done in " << ms << " ms\n";
+    std::cout << "100 insert has been done in " << ms << " ms\n";
 
-    auto bytes_transferred = (buffer.size() + 18) * total; // payload + response
+    auto bytes_transferred = (buffer.size() + 1) * total; // payload + response
     double seconds = ms / 1000.0;
 
     std::cout << "Total transferred: " << bytes_transferred << " bytes\n";

@@ -6,9 +6,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+
+    strategy:
+      matrix:
+        size: [UINT8, UINT16, UINT32, UINT64]
+
+
     services:
       throttr:
-        image: ghcr.io/throttr/throttr:2.1.1-release
+        image: ghcr.io/throttr/throttr:4.0.14-debug-${{ matrix.size }}
         ports:
           - 9000:9000
 
@@ -21,7 +27,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SDK_TESTS=OFF -DBUILD_SDK_BENCHMARK=ON
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SDK_TESTS=OFF -DBUILD_SDK_BENCHMARK=ON -DRUNTIME_VALUE_SIZE=${{ matrix.size }}
           make -j4
           
           for i in {1..10}; do

@@ -22,33 +22,33 @@ using namespace throttr;
 
 class ServiceRawErrorTest : public ::testing::Test {
 public:
-    boost::asio::io_context io;
-    std::unique_ptr<service> svc;
+    boost::asio::io_context _io;
+    std::unique_ptr<service> _svc;
 
     void SetUp() override {
-        service_config cfg{ "throttr", 9000, 4 };
-        svc = std::make_unique<service>(io.get_executor(), cfg);
+        service_config _cfg{ "throttr", 9000, 4 };
+        _svc = std::make_unique<service>(_io.get_executor(), _cfg);
     }
 
     void TearDown() override {
-        svc.reset();
+        _svc.reset();
     }
 };
 
 TEST_F(ServiceRawErrorTest, ThrowsWhenNoConnectionsAvailable) {
-    io.restart();
+    _io.restart();
 
-    bool error_triggered = false;
+    bool _error_triggered = false;
 
-    const std::vector dummy_buffer(1, std::byte{0x01});
+    const std::vector _dummy_buffer(1, std::byte{0x01});
 
-    svc->send_raw(dummy_buffer, [&](boost::system::error_code ec, std::vector<std::byte>) { // NOSONAR
+    _svc->send_raw(_dummy_buffer, [&](boost::system::error_code ec, std::vector<std::byte>) { // NOSONAR
         if (ec == boost::system::errc::not_connected) {
-            error_triggered = true;
+            _error_triggered = true;
         }
     });
 
-    io.run();
+    _io.run();
 
-    ASSERT_TRUE(error_triggered) << "Expected error due to no available connections";
+    ASSERT_TRUE(_error_triggered) << "Expected error due to no available connections";
 }

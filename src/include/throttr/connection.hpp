@@ -165,13 +165,13 @@ class connection : public std::enable_shared_from_this<connection>
 
     /**
      * Read response head
-     * 
+     *
      * @param operation
      * @param on_success
      */
     void read_response_head(
-    const std::shared_ptr<write_operation>& operation,
-    std::function<void(std::shared_ptr<std::array<std::byte, 1>>)> on_success)
+        const std::shared_ptr<write_operation>&                               operation,
+        const std::function<void(std::shared_ptr<std::array<std::byte, 1>>)>& on_success)
     {
         auto _self = shared_from_this();
         auto _head = std::make_shared<std::array<std::byte, 1>>();
@@ -182,7 +182,9 @@ class connection : public std::enable_shared_from_this<connection>
             boost::asio::transfer_exactly(1),
             boost::asio::bind_executor(
                 strand_,
-                [_self, operation, _head, on_success](const boost::system::error_code& ec, std::size_t) {
+                [_self, operation, _head, on_success](
+                    const boost::system::error_code& ec, std::size_t)
+                {
                     if (ec)
                     {
                         operation->handler(ec, {});
@@ -190,8 +192,7 @@ class connection : public std::enable_shared_from_this<connection>
                         return;
                     }
 
-                    const auto _status = std::to_integer<uint8_t>((*_head)[0]);
-                    if (_status == 0x00)
+                    if (const auto _status = std::to_integer<uint8_t>((*_head)[0]); _status == 0x00)
                     {
                         operation->handler({}, std::vector(_head->begin(), _head->end()));
                         _self->do_write();
@@ -203,6 +204,84 @@ class connection : public std::enable_shared_from_this<connection>
     }
 
     /**
+     * Read GET header
+     *
+     * @param operation
+     * @param head
+     */
+    void read_get_header(const std::shared_ptr<write_operation>&          operation,
+                         const std::shared_ptr<std::array<std::byte, 1>>& head)
+    {
+        constexpr std::size_t N            = sizeof(value_type);
+        constexpr std::size_t _header_size = 1 + N + N;
+
+        auto _self   = shared_from_this();
+        auto _header = std::make_shared<std::vector<std::byte>>(_header_size);
+
+        boost::asio::async_read(
+            socket_,
+            boost::asio::buffer(*_header),
+            boost::asio::transfer_exactly(_header_size),
+            boost::asio::bind_executor(
+                strand_,
+                [_self, operation, head, _header](const boost::system::error_code& ec, std::size_t)
+                {
+                    if (ec)
+                    {
+                        operation->handler(ec, {});
+                        _self->do_write();
+                        return;
+                    }
+
+                    value_type _size = 0;
+                    std::memcpy(&_size, _header->data() + 1 + N, N);
+                    _self->read_get_value(operation, head, _header, _size);
+                }));
+    }
+
+    /**
+     * Read GET value
+     *
+     * @param operation
+     * @param head
+     * @param header
+     * @param size
+     */
+    void read_get_value(const std::shared_ptr<write_operation>&          operation,
+                        const std::shared_ptr<std::array<std::byte, 1>>& head,
+                        const std::shared_ptr<std::vector<std::byte>>&   header,
+                        value_type                                       size)
+    {
+        auto _self  = shared_from_this();
+        auto _value = std::make_shared<std::vector<std::byte>>(size);
+
+        boost::asio::async_read(
+            socket_,
+            boost::asio::buffer(*_value),
+            boost::asio::transfer_exactly(size),
+            boost::asio::bind_executor(
+                strand_,
+                [_self, operation, head, header, _value](
+                    const boost::system::error_code& ec, std::size_t)
+                {
+                    if (ec)
+                    {
+                        operation->handler(ec, {});
+                    }
+                    else
+                    {
+                        std::vector<std::byte> _full;
+                        _full.reserve(1 + header->size() + _value->size());
+                        _full.insert(_full.end(), head->begin(), head->end());
+                        _full.insert(_full.end(), header->begin(), header->end());
+                        _full.insert(_full.end(), _value->begin(), _value->end());
+                        operation->handler({}, std::move(_full));
+                    }
+                    _self->do_write();
+                }));
+    }
+
+    /**
      * Handle response GET
      *
      * @param operation
@@ -210,63 +289,9 @@ class connection : public std::enable_shared_from_this<connection>
     void handle_response_get(const std::shared_ptr<write_operation>& operation)
     {
         auto _self = shared_from_this();
-        read_response_head(operation, [_self, operation] (auto _head) {
-           constexpr std::size_t N            = sizeof(value_type);
-                    constexpr std::size_t _header_size = 1 + N + N;
-                    auto _header = std::make_shared<std::vector<std::byte>>(_header_size);
-                    boost::asio::async_read(
-                        _self->socket_,
-                        boost::asio::buffer(*_header),
-                        boost::asio::transfer_exactly(_header_size),
-                        boost::asio::bind_executor(
-                            _self->strand_,
-                            [_self, operation, _head, _header](
-                                const boost::system::error_code& header_ec, std::size_t)
-                            {
-                                if (header_ec)
-                                {
-                                    operation->handler(header_ec, {});
-                                    _self->do_write();
-                                    return;
-                                }
-
-                                value_type _size = 0;
-                                for (std::size_t i = 0; i < N; ++i)
-                                {
-                                    _size |= (std::to_integer<uint8_t>((*_header)[1 + N + i])
-                                              << (i * 8));
-                                }
-
-                                auto _value = std::make_shared<std::vector<std::byte>>(_size);
-                                boost::asio::async_read(
-                                    _self->socket_,
-                                    boost::asio::buffer(*_value),
-                                    boost::asio::transfer_exactly(_size),
-                                    boost::asio::bind_executor(
-                                        _self->strand_,
-                                        [_self, operation, _head, _header, _value](
-                                            const boost::system::error_code& value_ec, std::size_t)
-                                        {
-                                            if (value_ec)
-                                            {
-                                                operation->handler(value_ec, {});
-                                            }
-                                            else
-                                            {
-                                                std::vector<std::byte> _full;
-                                                _full.reserve(1 + _header->size() + _value->size());
-                                                _full.insert(
-                                                    _full.end(), _head->begin(), _head->end());
-                                                _full.insert(
-                                                    _full.end(), _header->begin(), _header->end());
-                                                _full.insert(
-                                                    _full.end(), _value->begin(), _value->end());
-                                                operation->handler({}, std::move(_full));
-                                            }
-                                            _self->do_write();
-                                        }));
-                            }));
-        });
+        read_response_head(operation,
+                           [_self, operation](auto _head)
+                           { _self->read_get_header(operation, _head); });
     }
 
     /**
@@ -277,33 +302,36 @@ class connection : public std::enable_shared_from_this<connection>
     void handle_response_query(const std::shared_ptr<write_operation>& operation)
     {
         auto _self = shared_from_this();
-        read_response_head(operation, [_self, operation] (auto _head) {
-            constexpr std::size_t _value_payload = sizeof(value_type) * 2 + 1;
-                   auto _rest = std::make_shared<std::vector<std::byte>>(_value_payload);
-                   boost::asio::async_read(
-                       _self->socket_,
-                       boost::asio::buffer(*_rest),
-                       boost::asio::transfer_exactly(_value_payload),
-                       boost::asio::bind_executor(
-                           _self->strand_,
-                           [_self, operation, _head, _rest](
-                               const boost::system::error_code& partial_ec, std::size_t)
-                           {
-                               if (partial_ec)
-                               {
-                                   operation->handler(partial_ec, {});
-                               }
-                               else
-                               {
-                                   std::vector<std::byte> _full;
-                                   _full.reserve(1 + _rest->size());
-                                   _full.insert(_full.end(), _head->begin(), _head->end());
-                                   _full.insert(_full.end(), _rest->begin(), _rest->end());
-                                   operation->handler({}, std::move(_full));
-                               }
-                               _self->do_write();
-                           }));
-        });
+        read_response_head(
+            operation,
+            [_self, operation](auto _head)
+            {
+                constexpr std::size_t _value_payload = sizeof(value_type) * 2 + 1;
+                auto _rest = std::make_shared<std::vector<std::byte>>(_value_payload);
+                boost::asio::async_read(
+                    _self->socket_,
+                    boost::asio::buffer(*_rest),
+                    boost::asio::transfer_exactly(_value_payload),
+                    boost::asio::bind_executor(
+                        _self->strand_,
+                        [_self, operation, _head, _rest](
+                            const boost::system::error_code& partial_ec, std::size_t)
+                        {
+                            if (partial_ec)
+                            {
+                                operation->handler(partial_ec, {});
+                            }
+                            else
+                            {
+                                std::vector<std::byte> _full;
+                                _full.reserve(1 + _rest->size());
+                                _full.insert(_full.end(), _head->begin(), _head->end());
+                                _full.insert(_full.end(), _rest->begin(), _rest->end());
+                                operation->handler({}, std::move(_full));
+                            }
+                            _self->do_write();
+                        }));
+            });
     }
 
     /**

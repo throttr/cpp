@@ -24,7 +24,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -DNDEBUG")
 set(CMAKE_CTEST_ARGUMENTS "--output-on-failure")
 
-
 find_package(Boost 1.87.0 REQUIRED COMPONENTS
         coroutine
         thread
@@ -41,27 +40,31 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(throttr-protocol)
 
-include_directories(src/include)
-file(GLOB_RECURSE HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.hpp")
+# Header-only library
+add_library(throttr-sdk INTERFACE)
 
-add_library(throttr-sdk STATIC ${HEADERS})
+target_include_directories(throttr-sdk INTERFACE src/include)
 
-target_include_directories(throttr-sdk
-        PUBLIC
-        src/include
+target_compile_definitions(throttr-sdk INTERFACE
+        THROTTR_VALUE_SIZE_${RUNTIME_VALUE_SIZE}
 )
 
-target_link_libraries(throttr-sdk
+target_compile_options(throttr-sdk INTERFACE
+        -static -static-libgcc -static-libstdc++
+)
+
+target_link_options(throttr-sdk INTERFACE
+        -static -static-libgcc -static-libstdc++
+)
+
+target_link_libraries(throttr-sdk INTERFACE
         ${Boost_LIBRARIES}
         throttr::protocol
 )
 
-target_compile_options(throttr-sdk PRIVATE -static -static-libgcc -static-libstdc++)
-target_link_options(throttr-sdk PRIVATE -static -static-libgcc -static-libstdc++)
-
 if (BUILD_SDK_BENCHMARK)
     add_executable(benchmark benchmark.cpp)
-    target_link_libraries(benchmark throttr-sdk ${Boost_LIBRARIES})
+    target_link_libraries(benchmark PRIVATE throttr-sdk ${Boost_LIBRARIES})
 endif()
 
 if (BUILD_SDK_TESTS)
@@ -75,7 +78,7 @@ if (BUILD_SDK_TESTS)
     FetchContent_MakeAvailable(googletest)
 
     enable_testing()
-    file(GLOB_RECURSE TESTS CONFIGURE_DEPENDS  ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cc)
+    file(GLOB_RECURSE TESTS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cc)
 
     add_executable(throttr-sdk-tests ${TESTS})
     target_link_libraries(throttr-sdk-tests

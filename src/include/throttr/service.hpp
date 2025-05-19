@@ -53,7 +53,7 @@ class service
      * @param cfg
      */
     service(boost::asio::any_io_executor ex, service_config cfg)
-    : executor_(std::move(ex)), config_(std::move(cfg))
+        : executor_(std::move(ex)), config_(std::move(cfg))
     {
     }
 
@@ -62,7 +62,8 @@ class service
      *
      * @param handler completion handler
      */
-    void connect(std::function<void(boost::system::error_code)> handler) {
+    void connect(std::function<void(boost::system::error_code)> handler)
+    {
         auto _shared_handler =
             std::make_shared<std::function<void(boost::system::error_code)>>(std::move(handler));
         auto _pending    = std::make_shared<std::atomic_size_t>(config_.max_connections_);
@@ -70,7 +71,8 @@ class service
 
         for (std::size_t _i = 0; _i < config_.max_connections_; ++_i)
         {
-            auto _connection = std::make_shared<connection>(executor_, config_.host_, config_.port_);
+            auto _connection =
+                std::make_shared<connection>(executor_, config_.host_, config_.port_);
             _connection->connect(
                 [this, _connection, _pending, _shared_handler, _error_flag](
                     boost::system::error_code ec)
@@ -88,8 +90,9 @@ class service
 
                     if (_pending->fetch_sub(1) == 1)
                     {
-                        (*_shared_handler)(_error_flag->load() ? boost::asio::error::operation_aborted
-                                                               : boost::system::error_code{});
+                        (*_shared_handler)(_error_flag->load()
+                                               ? boost::asio::error::operation_aborted
+                                               : boost::system::error_code{});
                     }
                 });
         }
@@ -100,7 +103,8 @@ class service
      *
      * @return bool
      */
-    [[nodiscard]] bool is_ready() const {
+    [[nodiscard]] bool is_ready() const
+    {
         return !connections_.empty() && std::ranges::all_of(connections_,
                                                             [](const std::shared_ptr<connection>& c)
                                                             { return c && c->is_open(); });
@@ -149,7 +153,8 @@ class service
      *
      * @return
      */
-    std::shared_ptr<connection> get_connection() {
+    std::shared_ptr<connection> get_connection()
+    {
         const auto _idx = next_connection_index_.fetch_add(1) % connections_.size();
         return connections_[_idx];
     }

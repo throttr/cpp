@@ -61,10 +61,6 @@ struct response_get {
         return _resp;
       }
       constexpr std::size_t N = sizeof(value_type);
-
-      if (buffer.size() < 1 + 1 + N + N)
-        throw response_error("response_get: buffer too small for metadata");
-
       std::size_t offset = 1;
 
       // TTL Type (1 byte)

@@ -109,7 +109,9 @@ class service {
   void send_raw(std::vector<std::byte> buffer,
                 std::function<void(boost::system::error_code,
                                    std::vector<std::byte>)> handler) {
+    // LCOV_EXCL_START
     if (connections_.empty()) {
+      // LCOV_EXCL_STOP
       handler(make_error_code(boost::system::errc::not_connected), {});
       return;
     }

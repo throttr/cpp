@@ -117,8 +117,8 @@ TEST(ResponseGetTest, FromBufferSuccessFull) {
 
     std::vector<std::byte> buffer(1 + 1 + N + N + size);
     std::size_t offset = 0;
-    buffer[offset++] = std::byte{0x01}; // success
-    buffer[offset++] = std::byte{0x03}; // ttl_type
+    buffer[offset++] = std::byte{0x01}; // NOSONAR success
+    buffer[offset++] = std::byte{0x03}; // NOSONAR ttl_type
     std::memcpy(buffer.data() + offset, &ttl, N);
     offset += N;
     std::memcpy(buffer.data() + offset, &size, N);

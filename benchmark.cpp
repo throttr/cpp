@@ -20,13 +20,13 @@ int main() {
     io_context io(thread_count);
     std::vector<std::unique_ptr<service>> services;
 
-    std::atomic<int> connected_count = 0;
-    std::atomic<bool> failed = false;
+    std::atomic connected_count = 0;
+    std::atomic failed = false;
 
     // Crear múltiples servicios (una conexión por cada hilo)
     for (int i = 0; i < thread_count; ++i) {
         auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 10});
-        svc->connect([&](boost::system::error_code ec) {
+        svc->connect([&failed, &connected_count](boost::system::error_code ec) {
             if (ec) {
                 std::cerr << "Connection error: " << ec.message() << "\n";
                 failed = true;
@@ -66,7 +66,10 @@ int main() {
 
     std::vector<std::thread> pool;
     for (int i = 0; i < thread_count; ++i)
-        pool.emplace_back([&] { io.run(); });
+        pool.emplace_back([&] {
+            // This should start to run the test
+            io.run();
+        });
 
     for (auto& t : pool)
         t.join();

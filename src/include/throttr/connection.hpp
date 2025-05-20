@@ -30,6 +30,7 @@
 #include <throttr/protocol_wrapper.hpp>
 #include <throttr/write_operation.hpp>
 #include <vector>
+#include <boost/core/ignore_unused.hpp>
 
 namespace throttr {
 /**
@@ -46,7 +47,7 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   connection(const boost::asio::any_io_executor& executor,
              std::string host,
-             uint16_t port)
+             const uint16_t port)
       : strand_(make_strand(executor)),
         resolver_(strand_),
         socket_(strand_),
@@ -104,8 +105,14 @@ class connection : public std::enable_shared_from_this<connection> {
     });
   }
 
+  /**
+   * Send many
+   *
+   * @param chunks
+   * @param handler
+   */
   void sendMany(
-      std::vector<std::vector<std::byte> > chunks,
+      const std::vector<std::vector<std::byte>> &chunks,
       std::function<void(boost::system::error_code,
                          std::vector<std::vector<std::byte> >)> handler) {
     std::vector<std::byte> _heads;
@@ -226,7 +233,7 @@ class connection : public std::enable_shared_from_this<connection> {
     }
   }
 
-  void read_status_value(const std::shared_ptr<write_operation>& op,
+  void read_status_value(const std::shared_ptr<write_operation>& operation,
                          std::function<void(boost::system::error_code,
                                             std::vector<std::byte>)> next) {
     auto _self = shared_from_this();
@@ -236,7 +243,8 @@ class connection : public std::enable_shared_from_this<connection> {
         socket_, boost::asio::buffer(*_buf), boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
             strand_,
-            [_self, op, _buf, next](boost::system::error_code ec, std::size_t) {
+            [_self, operation, _buf, next](boost::system::error_code ec, std::size_t) {
+              boost::ignore_unused(_self, operation);
               if (ec) {
                 next(ec, {});
               } else {
@@ -273,8 +281,7 @@ class connection : public std::enable_shared_from_this<connection> {
 
               if (const auto _status = std::to_integer<uint8_t>((*_head)[0]);
                   _status == 0x00) {
-                // ✅ En lugar de llamar directamente al handler:
-                std::vector<std::byte> _full(_head->begin(), _head->end());
+                std::vector _full(_head->begin(), _head->end());
                 operation->responses_.emplace_back(std::move(_full));
                 _self->handle_write(operation);
                 return;

@@ -134,14 +134,14 @@ class service {
   void send_many(Handler&& handler,
                  std::vector<std::vector<std::byte>> requests) {
     if (connections_.empty()) {
-      std::move(handler)(make_error_code(boost::system::errc::not_connected),
+      std::forward<Handler>(handler)(make_error_code(boost::system::errc::not_connected),
                          T{}...);
       return;
     }
 
     const auto conn = get_connection();
     if (!conn || !conn->is_open()) {
-      std::move(handler)(
+      std::forward<Handler>(handler)(
           make_error_code(boost::system::errc::connection_aborted), T{}...);
       return;
     }
@@ -167,7 +167,7 @@ class service {
   static void call_with_parsed(const std::vector<std::vector<std::byte>>& data,
                                Handler&& handler,
                                std::index_sequence<I...>) {
-    std::move(handler)({}, T::from_buffer(data[I])...);
+    std::forward<Handler>(handler)({}, T::from_buffer(data[I])...);
   }
 
   /**

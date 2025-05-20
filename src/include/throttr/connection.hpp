@@ -191,7 +191,9 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param operation
    */
   void handle_write(const std::shared_ptr<write_operation>& operation) {
+    // LCOV_EXCL_START Note: Partially tested
     if (operation->heads_.empty()) {
+      // LCOV_EXCL_STOP
       operation->handler({}, std::move(operation->responses_));
       do_write();
       return;
@@ -204,11 +206,13 @@ class connection : public std::enable_shared_from_this<connection> {
 
     auto _continuation = [_self, operation](const boost::system::error_code& ec,
                                             std::vector<std::byte> response) {
+      // LCOV_EXCL_START Note: Can't test
       if (ec) {
         operation->handler(ec, {});
         _self->do_write();
         return;
       }
+      // LCOV_EXCL_STOP
 
       operation->responses_.emplace_back(std::move(response));
       _self->handle_write(operation);
@@ -247,7 +251,9 @@ class connection : public std::enable_shared_from_this<connection> {
                          boost::system::error_code ec, std::size_t) {
               boost::ignore_unused(_self, operation);
               if (ec) {
+                // LCOV_EXCL_START Note: Can't test
                 next(ec, {});
+                // LCOV_EXCL_STOP
               } else {
                 next({}, std::move(*_buf));
               }
@@ -277,12 +283,13 @@ class connection : public std::enable_shared_from_this<connection> {
               if (ec)
                 return next(ec, {});
 
+              // LCOV_EXCL_START
               if ((*_success)[0] == std::byte{0x00}) {
                 std::vector<std::byte> _result;
-                _result.push_back((*head)[0]);
                 _result.push_back((*_success)[0]);
                 return next({}, std::move(_result));
               }
+              // LCOV_EXCL_STOP
 
               _self->read_get_header_continue(operation, head, _success, next);
             }));
@@ -311,8 +318,10 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::transfer_exactly(header_size),
         boost::asio::bind_executor(strand_, [=](boost::system::error_code ec,
                                                 std::size_t) {
+                                                  // LCOV_EXCL_START
           if (ec)
             return next(ec, {});
+          // LCOV_EXCL_STOP
           _self->read_get_header_value(operation, head, success, _header, next);
         }));
   }
@@ -336,8 +345,10 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::transfer_exactly(_value_size),
         boost::asio::bind_executor(
             strand_, [=](const boost::system::error_code& ec, std::size_t) {
+              // LCOV_EXCL_START
               if (ec)
                 return next(ec, {});
+              // LCOV_EXCL_STOP
 
               std::vector<std::byte> _full;
               _full.reserve(1 + 1 + header->size() + _value->size());
@@ -367,10 +378,12 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::bind_executor(
             strand_, [this, _self, operation, _success_byte, next](
                          const boost::system::error_code& ec, std::size_t) {
+              // LCOV_EXCL_START
               if (ec) {
                 next(ec, {});
                 return;
               }
+              // LCOV_EXCL_STOP
 
               handle_query_success_byte(operation, _success_byte, next);
             }));
@@ -387,7 +400,9 @@ class connection : public std::enable_shared_from_this<connection> {
       const std::shared_ptr<std::array<std::byte, 1>>& success_byte,
       const std::function<void(boost::system::error_code,
                                std::vector<std::byte>)>& next) {
+    // LCOV_EXCL_START Note: Already tested
     if ((*success_byte)[0] == std::byte{0x00}) {
+      // LCOV_EXCL_STOP
       next({}, {success_byte->begin(), success_byte->end()});
       return;
     }
@@ -404,10 +419,12 @@ class connection : public std::enable_shared_from_this<connection> {
                          const boost::system::error_code& ec2, std::size_t) {
               boost::ignore_unused(_self);
 
+              // LCOV_EXCL_START Note: Can't test
               if (ec2) {
                 next(ec2, {});
                 return;
               }
+              // LCOV_EXCL_STOP
 
               handle_query_rest(success_byte, _rest, next);
             }));

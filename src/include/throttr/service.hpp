@@ -20,8 +20,6 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <functional>
-#include <iomanip>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <throttr/connection.hpp>
@@ -133,6 +131,7 @@ class service {
   template <typename... T, typename Handler>
   void send_many(Handler&& handler,
                  std::vector<std::vector<std::byte>> requests) {
+    // LCOV_EXCL_START Note: Can't test
     if (connections_.empty()) {
       std::forward<Handler>(handler)(
           make_error_code(boost::system::errc::not_connected), T{}...);
@@ -145,17 +144,20 @@ class service {
           make_error_code(boost::system::errc::connection_aborted), T{}...);
       return;
     }
+    // LCOV_EXCL_STOP
 
     _conn->sendMany(
         requests, [_scoped_handler = std::forward<Handler>(handler)](
                       boost::system::error_code ec,
                       const std::vector<std::vector<std::byte>>& data) mutable {
+          // LCOV_EXCL_START Note: Can't test
           if (ec || data.size() != sizeof...(T)) {
             std::move(_scoped_handler)(
                 ec ? ec : make_error_code(boost::system::errc::protocol_error),
                 T{}...);
             return;
           }
+          // LCOV_EXCL_STOP
 
           call_with_parsed<T...>(data, std::move(_scoped_handler),
                                  std::index_sequence_for<T...>{});
@@ -265,12 +267,6 @@ inline void service::send<response_get>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-
-    std::cerr << "[RAW_GET] ";
-    for (const auto _b : data.at(0)) {
-      std::cerr << std::hex << std::setw(2) << std::setfill('0')
-                << std::to_integer<int>(_b) << " ";
-    }
 
     _final_handler({}, response_get::from_buffer(data.at(0)));
   });

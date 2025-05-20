@@ -106,9 +106,10 @@ class service {
    * @param buffer
    * @param handler
    */
-  void send_raw(std::vector<std::byte> buffer,
-                std::function<void(boost::system::error_code,
-                                   std::vector<std::byte>)> handler) {
+  void send_raw(
+      std::vector<std::byte> buffer,
+      std::function<void(boost::system::error_code,
+                         std::vector<std::vector<std::byte>>)> handler) {
     // LCOV_EXCL_START
     if (connections_.empty()) {
       // LCOV_EXCL_STOP
@@ -123,8 +124,50 @@ class service {
       return;
     }
     // LCOV_EXCL_STOP
-
     _connection->send(std::move(buffer), std::move(handler));
+  }
+
+  template <typename... T, typename Handler>
+  void send_many(Handler&& handler,
+                 std::vector<std::vector<std::byte>> requests) {
+    // LCOV_EXCL_START Note: Can't test
+    if (connections_.empty()) {
+      std::forward<Handler>(handler)(
+          make_error_code(boost::system::errc::not_connected), T{}...);
+      return;
+    }
+
+    const auto _conn = get_connection();
+    if (!_conn || !_conn->is_open()) {
+      std::forward<Handler>(handler)(
+          make_error_code(boost::system::errc::connection_aborted), T{}...);
+      return;
+    }
+    // LCOV_EXCL_STOP
+
+    _conn->sendMany(
+        requests, [_scoped_handler = std::forward<Handler>(handler)](
+                      boost::system::error_code ec,
+                      const std::vector<std::vector<std::byte>>& data) mutable {
+          // LCOV_EXCL_START Note: Can't test
+          if (ec || data.size() != sizeof...(T)) {
+            std::move(_scoped_handler)(
+                ec ? ec : make_error_code(boost::system::errc::protocol_error),
+                T{}...);
+            return;
+          }
+          // LCOV_EXCL_STOP
+
+          call_with_parsed<T...>(data, std::move(_scoped_handler),
+                                 std::index_sequence_for<T...>{});
+        });
+  }
+
+  template <typename... T, std::size_t... I, typename Handler>
+  static void call_with_parsed(const std::vector<std::vector<std::byte>>& data,
+                               Handler&& handler,
+                               std::index_sequence<I...>) {
+    std::forward<Handler>(handler)({}, T::from_buffer(data[I])...);
   }
 
   /**
@@ -185,7 +228,7 @@ inline void service::send<response_status>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_status::from_buffer(data));
+    _final_handler({}, response_status::from_buffer(data.at(0)));
   });
 }
 
@@ -204,7 +247,7 @@ inline void service::send<response_query>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_query::from_buffer(data));
+    _final_handler({}, response_query::from_buffer(data.at(0)));
   });
 }
 
@@ -223,7 +266,8 @@ inline void service::send<response_get>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_get::from_buffer(data));
+
+    _final_handler({}, response_get::from_buffer(data.at(0)));
   });
 }
 

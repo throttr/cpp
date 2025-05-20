@@ -22,10 +22,12 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/strand.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <deque>
 #include <functional>
 #include <mutex>
 #include <string>
+#include <throttr/aliases.hpp>
 #include <throttr/protocol_wrapper.hpp>
 #include <throttr/write_operation.hpp>
 #include <vector>
@@ -45,7 +47,7 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   connection(const boost::asio::any_io_executor& executor,
              std::string host,
-             uint16_t port)
+             const uint16_t port)
       : strand_(make_strand(executor)),
         resolver_(strand_),
         socket_(strand_),
@@ -85,11 +87,55 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   void send(std::vector<std::byte> buffer,
             std::function<void(boost::system::error_code,
-                               std::vector<std::byte>)> handler) {
+                               std::vector<std::vector<std::byte>>)> handler) {
     auto _self = shared_from_this();
+    std::vector _heads = {std::byte{buffer[0]}};
     post(strand_, [_self, _scoped_buffer = std::move(buffer),
+                   _scoped_heads = std::move(_heads),
                    _final_handler = std::move(handler)]() mutable {
       _self->queue_.emplace_back(std::move(_scoped_buffer),
+                                 std::move(_scoped_heads),
+                                 std::move(_final_handler));
+      // LCOV_EXCL_START
+      if (!_self->writing_) {
+        // LCOV_EXCL_STOP
+        _self->writing_ = true;
+        _self->do_write();
+      }
+    });
+  }
+
+  /**
+   * Send many
+   *
+   * @param chunks
+   * @param handler
+   */
+  void sendMany(
+      const std::vector<std::vector<std::byte>>& chunks,
+      std::function<void(boost::system::error_code,
+                         std::vector<std::vector<std::byte>>)> handler) {
+    std::vector<std::byte> _heads;
+    std::vector<std::byte> _buffer;
+    _heads.reserve(chunks.size());
+    size_t _total_size = 0;
+    for (const auto& buffer : chunks) {
+      _heads.push_back(buffer.at(0));
+      _total_size += buffer.size();
+    }
+
+    _buffer.reserve(_total_size);
+
+    for (const auto& chunk : chunks) {
+      _buffer.insert(_buffer.end(), chunk.begin(), chunk.end());
+    }
+
+    auto _self = shared_from_this();
+    post(strand_, [_self, _scoped_buffer = std::move(_buffer),
+                   _scoped_heads = std::move(_heads),
+                   _final_handler = std::move(handler)]() mutable {
+      _self->queue_.emplace_back(std::move(_scoped_buffer),
+                                 std::move(_scoped_heads),
                                  std::move(_final_handler));
       // LCOV_EXCL_START
       if (!_self->writing_) {
@@ -145,55 +191,72 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param operation
    */
   void handle_write(const std::shared_ptr<write_operation>& operation) {
-    // LCOV_EXCL_START
-    if (const auto _type = std::to_integer<uint8_t>(operation->buffer_[0]);
-        _type == 0x02) {
+    // LCOV_EXCL_START Note: Partially tested
+    if (operation->heads_.empty()) {
       // LCOV_EXCL_STOP
-      handle_response_query(operation);
-      // LCOV_EXCL_START
-    } else if (_type == 0x06) {
+      operation->handler({}, std::move(operation->responses_));
+      do_write();
+      return;
+    }
+
+    const auto _type = std::to_integer<uint8_t>(operation->heads_.front());
+    operation->heads_.erase(operation->heads_.begin());
+
+    auto _self = shared_from_this();
+
+    auto _continuation = [_self, operation](const boost::system::error_code& ec,
+                                            std::vector<std::byte> response) {
+      // LCOV_EXCL_START Note: Can't test
+      if (ec) {
+        operation->handler(ec, {});
+        _self->do_write();
+        return;
+      }
       // LCOV_EXCL_STOP
-      handle_response_get(operation);
-    } else {
-      handle_response_status(operation);
+
+      operation->responses_.emplace_back(std::move(response));
+      _self->handle_write(operation);
+    };
+
+    switch (_type) {
+      case 0x02: {
+        const auto _head = std::make_shared<std::array<std::byte, 1>>();
+        (*_head)[0] = std::byte{_type};
+        read_query_value(operation, std::move(_continuation));
+        break;
+      }
+      case 0x06: {
+        const auto _head = std::make_shared<std::array<std::byte, 1>>();
+        (*_head)[0] = std::byte{_type};
+        read_get_header(operation, _head, std::move(_continuation));
+        break;
+      }
+      default:
+        read_status_value(operation, std::move(_continuation));
+        break;
     }
   }
 
-  /**
-   * Read response head
-   *
-   * @param operation
-   * @param on_success
-   */
-  void read_response_head(
+  void read_status_value(
       const std::shared_ptr<write_operation>& operation,
-      const std::function<void(std::shared_ptr<std::array<std::byte, 1>>)>&
-          on_success) {
+      const std::function<void(boost::system::error_code,
+                               std::vector<std::byte>)>& next) {
     auto _self = shared_from_this();
-    auto _head = std::make_shared<std::array<std::byte, 1>>();
+    auto _buf = std::make_shared<std::vector<std::byte>>(1);
 
     boost::asio::async_read(
-        socket_, boost::asio::buffer(*_head), boost::asio::transfer_exactly(1),
+        socket_, boost::asio::buffer(*_buf), boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
-            strand_, [_self, operation, _head, on_success](
-                         const boost::system::error_code& ec, std::size_t) {
-              // LCOV_EXCL_START
+            strand_, [_self, operation, _buf, next](
+                         const boost::system::error_code &ec, std::size_t) {
+              boost::ignore_unused(_self, operation);
               if (ec) {
-                operation->handler(ec, {});
-                _self->do_write();
-                return;
+                // LCOV_EXCL_START Note: Can't test
+                next(ec, {});
+                // LCOV_EXCL_STOP
+              } else {
+                next({}, std::move(*_buf));
               }
-              // LCOV_EXCL_STOP
-
-              if (const auto _status = std::to_integer<uint8_t>((*_head)[0]);
-                  _status == 0x00) {
-                operation->handler({},
-                                   std::vector(_head->begin(), _head->end()));
-                _self->do_write();
-                return;
-              }
-
-              on_success(_head);
             }));
   }
 
@@ -202,150 +265,199 @@ class connection : public std::enable_shared_from_this<connection> {
    *
    * @param operation
    * @param head
+   * @param next
    */
-  void read_get_header(const std::shared_ptr<write_operation>& operation,
-                       const std::shared_ptr<std::array<std::byte, 1>>& head) {
-    constexpr std::size_t N = sizeof(value_type);
-    constexpr std::size_t _header_size = 1 + N + N;
-
-    auto _self = shared_from_this();
-    auto _header = std::make_shared<std::vector<std::byte>>(_header_size);
+  void read_get_header(
+      const std::shared_ptr<write_operation>& operation,
+      const std::shared_ptr<std::array<std::byte, 1>>& head,
+      const std::function<void(boost::system::error_code,
+                               std::vector<std::byte>)>& next) {
+    const auto _self = shared_from_this();
+    const auto _success = std::make_shared<std::array<std::byte, 1>>();
 
     boost::asio::async_read(
-        socket_, boost::asio::buffer(*_header),
-        boost::asio::transfer_exactly(_header_size),
+        socket_, boost::asio::buffer(*_success),
+        boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
-            strand_, [_self, operation, head, _header](
-                         const boost::system::error_code& ec, std::size_t) {
+            strand_, [next, _success, head, operation, _self](const boost::system::error_code& ec, std::size_t) {
               // LCOV_EXCL_START
-              if (ec) {
-                operation->handler(ec, {});
-                _self->do_write();
-                return;
+              if (ec)
+                return next(ec, {});
+              // LCOV_EXCL_STOP
+
+              // LCOV_EXCL_START
+              if ((*_success)[0] == std::byte{0x00}) {
+                std::vector<std::byte> _result;
+                _result.push_back((*_success)[0]);
+                return next({}, std::move(_result));
               }
               // LCOV_EXCL_STOP
 
-              value_type _size = 0;
-              std::memcpy(&_size, _header->data() + 1 + N, N);
-              _self->read_get_value(operation, head, _header, _size);
+              _self->read_get_header_continue(operation, head, _success, next);
             }));
   }
 
   /**
-   * Read GET value
+   * Continue reading GET header
    *
    * @param operation
    * @param head
-   * @param header
-   * @param size
+   * @param success
+   * @param next
    */
-  void read_get_value(const std::shared_ptr<write_operation>& operation,
-                      const std::shared_ptr<std::array<std::byte, 1>>& head,
-                      const std::shared_ptr<std::vector<std::byte>>& header,
-                      value_type size) {
+  void read_get_header_continue(
+      const std::shared_ptr<write_operation>& operation,
+      const std::shared_ptr<std::array<std::byte, 1>>& head,
+      const std::shared_ptr<std::array<std::byte, 1>>& success,
+      const std::function<void(boost::system::error_code,
+                               std::vector<std::byte>)>& next) {
+    constexpr std::size_t header_size = 1 + sizeof(value_type) * 2;
+    const auto _header = std::make_shared<std::vector<std::byte>>(header_size);
+
+    const auto _self = shared_from_this();
+    boost::asio::async_read(
+        socket_, boost::asio::buffer(*_header),
+        boost::asio::transfer_exactly(header_size),
+        boost::asio::bind_executor(strand_, [_self, _header, next, operation, head, success](const boost::system::error_code &ec,
+                                                std::size_t) {
+                                                  // LCOV_EXCL_START
+          if (ec)
+            return next(ec, {});
+          // LCOV_EXCL_STOP
+          _self->read_get_header_value(operation, head, success, _header, next);
+        }));
+  }
+
+  void read_get_header_value(
+      const std::shared_ptr<write_operation>& operation,
+      const std::shared_ptr<std::array<std::byte, 1>>& head,
+      const std::shared_ptr<std::array<std::byte, 1>>& success,
+      const std::shared_ptr<std::vector<std::byte>>& header,
+      const std::function<void(boost::system::error_code,
+                               std::vector<std::byte>)>& next) {
+    boost::ignore_unused(operation, head);
+
+    value_type _value_size = 0;
+    std::memcpy(&_value_size, header->data() + 1 + sizeof(value_type),
+                sizeof(value_type));
+
+    const auto _value = std::make_shared<std::vector<std::byte>>(_value_size);
+
     auto _self = shared_from_this();
-    auto _value = std::make_shared<std::vector<std::byte>>(size);
 
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_value),
-        boost::asio::transfer_exactly(size),
+        boost::asio::transfer_exactly(_value_size),
         boost::asio::bind_executor(
-            strand_, [_self, operation, head, header, _value](
-                         const boost::system::error_code& ec, std::size_t) {
-              if (ec) {
-                // LCOV_EXCL_START
-                operation->handler(ec, {});
-                // LCOV_EXCL_STOP
-              } else {
-                std::vector<std::byte> _full;
-                _full.reserve(1 + header->size() + _value->size());
-                _full.insert(_full.end(), head->begin(), head->end());
-                _full.insert(_full.end(), header->begin(), header->end());
-                _full.insert(_full.end(), _value->begin(), _value->end());
-                operation->handler({}, std::move(_full));
-              }
-              _self->do_write();
-            }));
-  }
+            strand_, [_self, _value, header, success, next, operation](const boost::system::error_code& ec, std::size_t) {
 
-  /**
-   * Handle response GET
-   *
-   * @param operation
-   */
-  void handle_response_get(const std::shared_ptr<write_operation>& operation) {
-    auto _self = shared_from_this();
-    read_response_head(operation, [_self, operation](auto _head) {
-      _self->read_get_header(operation, _head);
-    });
+              boost::ignore_unused(_self, operation);
+
+              // LCOV_EXCL_START
+              if (ec)
+                return next(ec, {});
+              // LCOV_EXCL_STOP
+
+              std::vector<std::byte> _full;
+              _full.reserve(1 + 1 + header->size() + _value->size());
+              _full.push_back((*success)[0]);
+              _full.insert(_full.end(), header->begin(), header->end());
+              _full.insert(_full.end(), _value->begin(), _value->end());
+              next({}, std::move(_full));
+            }));
   }
 
   /**
    * Read query value
    *
    * @param operation
-   * @param head
+   * @param next
    */
-  void read_query_value(const std::shared_ptr<write_operation>& operation,
-                        const std::shared_ptr<std::array<std::byte, 1>>& head) {
-    constexpr std::size_t payload_size = sizeof(value_type) * 2 + 1;
-
+  void read_query_value(
+      const std::shared_ptr<write_operation>& operation,
+      const std::function<void(boost::system::error_code,
+                               std::vector<std::byte>)>& next) {
     auto _self = shared_from_this();
-    auto _rest = std::make_shared<std::vector<std::byte>>(payload_size);
+    auto _success_byte = std::make_shared<std::array<std::byte, 1>>();
 
     boost::asio::async_read(
-        socket_, boost::asio::buffer(*_rest),
-        boost::asio::transfer_exactly(payload_size),
-        boost::asio::bind_executor(
-            strand_, [_self, operation, head, _rest](
-                         const boost::system::error_code& ec, std::size_t) {
-              if (ec) {
-                // LCOV_EXCL_START
-                operation->handler(ec, {});
-                // LCOV_EXCL_STOP
-              } else {
-                std::vector<std::byte> _full;
-                _full.reserve(1 + _rest->size());
-                _full.insert(_full.end(), head->begin(), head->end());
-                _full.insert(_full.end(), _rest->begin(), _rest->end());
-                operation->handler({}, std::move(_full));
-              }
-              _self->do_write();
-            }));
-  }
-
-  /**
-   * Handle response QUERY
-   *
-   * @param operation
-   */
-  void handle_response_query(
-      const std::shared_ptr<write_operation>& operation) {
-    auto _self = shared_from_this();
-    read_response_head(operation, [_self, operation](auto _head) {
-      _self->read_query_value(operation, _head);
-    });
-  }
-
-  /**
-   * Handle response STATUS
-   *
-   * @param operation
-   */
-  void handle_response_status(
-      const std::shared_ptr<write_operation>& operation) {
-    auto _self = shared_from_this();
-    auto _response_buffer = std::make_shared<std::vector<std::byte>>(1);
-    boost::asio::async_read(
-        socket_, boost::asio::buffer(*_response_buffer),
+        socket_, boost::asio::buffer(*_success_byte),
         boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
-            strand_, [_self, operation, _response_buffer](
+            strand_, [this, _self, operation, _success_byte, next](
                          const boost::system::error_code& ec, std::size_t) {
-              operation->handler(ec, ec ? std::vector<std::byte>{}
-                                        : std::move(*_response_buffer));
-              _self->do_write();
+
+              boost::ignore_unused(_self);
+
+              // LCOV_EXCL_START
+              if (ec) {
+                next(ec, {});
+                return;
+              }
+              // LCOV_EXCL_STOP
+
+              handle_query_success_byte(operation, _success_byte, next);
             }));
+  }
+
+  /**
+   * Handle query on success byte
+   *
+   * @param operation
+   * @param success_byte
+   * @param next
+   */
+  void handle_query_success_byte(
+      const std::shared_ptr<write_operation>& operation,
+      const std::shared_ptr<std::array<std::byte, 1>>& success_byte,
+      const std::function<void(boost::system::error_code,
+                               std::vector<std::byte>)>& next) {
+    // LCOV_EXCL_START Note: Already tested
+    if ((*success_byte)[0] == std::byte{0x00}) {
+      // LCOV_EXCL_STOP
+      next({}, {success_byte->begin(), success_byte->end()});
+      return;
+    }
+
+    constexpr std::size_t _rest_size = sizeof(value_type) * 2 + 1;
+    auto _rest = std::make_shared<std::vector<std::byte>>(_rest_size);
+
+    auto _self = shared_from_this();
+    boost::asio::async_read(
+        socket_, boost::asio::buffer(*_rest),
+        boost::asio::transfer_exactly(_rest_size),
+        boost::asio::bind_executor(
+            strand_, [this, _self, success_byte, _rest, next, operation](
+                         const boost::system::error_code& ec2, std::size_t) {
+              boost::ignore_unused(_self, operation);
+
+              // LCOV_EXCL_START Note: Can't test
+              if (ec2) {
+                next(ec2, {});
+                return;
+              }
+              // LCOV_EXCL_STOP
+
+              handle_query_rest(success_byte, _rest, next);
+            }));
+  }
+
+  /**
+   * Handle query rest
+   * @param success_byte
+   * @param rest
+   * @param next
+   */
+  template <typename Handler>
+  static void handle_query_rest(
+      const std::shared_ptr<std::array<std::byte, 1>>& success_byte,
+      const std::shared_ptr<std::vector<std::byte>>& rest,
+       Handler&& next) {
+    std::vector<std::byte> _full;
+    _full.reserve(1 + rest->size());
+    _full.push_back((*success_byte)[0]);
+    _full.insert(_full.end(), rest->begin(), rest->end());
+    next({}, std::move(_full));
   }
 
   /**

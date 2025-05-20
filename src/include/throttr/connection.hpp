@@ -273,7 +273,7 @@ class connection : public std::enable_shared_from_this<connection> {
         socket_, boost::asio::buffer(*_success),
         boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
-            strand_, [=](const boost::system::error_code& ec, std::size_t) {
+            strand_, [next, _success, head, operation, _self](const boost::system::error_code& ec, std::size_t) {
               if (ec)
                 return next(ec, {});
 
@@ -419,11 +419,11 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param rest
    * @param next
    */
+  template <typename Handler>
   static void handle_query_rest(
       const std::shared_ptr<std::array<std::byte, 1>>& success_byte,
       const std::shared_ptr<std::vector<std::byte>>& rest,
-      const std::function<void(boost::system::error_code,
-                               std::vector<std::byte>)>& next) {
+       Handler&& next) {
     std::vector<std::byte> _full;
     _full.reserve(1 + rest->size());
     _full.push_back((*success_byte)[0]);

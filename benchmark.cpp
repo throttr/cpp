@@ -48,6 +48,8 @@ int main() {
     while (!ready) io.run_one();
     io.restart();
 
+    std::this_thread::sleep_for(std::chrono::seconds(5));
+
     constexpr int total = 100;
     const std::string key = "resource|consumer";
     auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);

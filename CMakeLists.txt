@@ -34,7 +34,7 @@ include(FetchContent)
 FetchContent_Declare(
         throttr-protocol
         GIT_REPOSITORY https://github.com/throttr/protocol.git
-        GIT_TAG 5.1.0
+        GIT_TAG 5.0.0
 )
 FetchContent_MakeAvailable(throttr-protocol)
 
@@ -69,7 +69,7 @@ install(EXPORT throttr-sdkTargets
 
 write_basic_package_version_file(
         "${CMAKE_CURRENT_BINARY_DIR}/throttr-sdkConfigVersion.cmake"
-        VERSION 5.0.0
+        VERSION 5.1.0
         COMPATIBILITY SameMajorVersion
 )
 

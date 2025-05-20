@@ -280,8 +280,10 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
             strand_, [next, _success, head, operation, _self](const boost::system::error_code& ec, std::size_t) {
+              // LCOV_EXCL_START
               if (ec)
                 return next(ec, {});
+              // LCOV_EXCL_STOP
 
               // LCOV_EXCL_START
               if ((*_success)[0] == std::byte{0x00}) {

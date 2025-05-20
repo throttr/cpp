@@ -124,7 +124,6 @@ class service {
       return;
     }
     // LCOV_EXCL_STOP
-
     _connection->send(std::move(buffer), std::move(handler));
   }
 

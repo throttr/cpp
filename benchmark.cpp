@@ -31,59 +31,60 @@
 using namespace throttr;
 using namespace boost::asio;
 
+
 int main() {
-    io_context io { static_cast<int>(std::thread::hardware_concurrency()) };
-    const service_config cfg = { "throttr", 9000, 10 };
+    io_context io;
+    service_config cfg{"throttr", 9000, 10};
     service svc(io.get_executor(), cfg);
 
-    auto error = false;
-    svc.connect([&](const boost::system::error_code &ec) { // NOSONAR
+    std::atomic<bool> connected = false;
+    std::atomic<bool> failed = false;
+
+    svc.connect([&](boost::system::error_code ec) {
         if (ec) {
             std::cerr << "Connection error: " << ec.message() << "\n";
-            error = true;
+            failed = true;
+            connected = true;
+            return;
         }
+        connected = true;
     });
 
-    io.run_one();
-    io.restart();
+    // Esperar conexión
+    while (!connected)
+        io.run_one();
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
-
-    if (!error) {
-        constexpr int total = 100'000;
-        const std::string key = "resource|consumer";
-        auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);
-        for (int i = 0; i < total; ++i) {
-            post(io, [&, buffer]() {
-                svc.send<response_status>(buffer, [](boost::system::error_code ec, response_status res) {
-                    boost::ignore_unused(ec, res);
-                });
-            });
-        }
-
-        const auto start = std::chrono::steady_clock::now();
-        std::puts("Running ...");
-        io.run();
-        std::puts("Ran ...");
-        const auto end = std::chrono::steady_clock::now();
-        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        std::cout << "100 insert has been done in " << ms << " ms\n";
-
-        auto bytes_transferred = (buffer.size() + 1) * total; // payload + response
-        double seconds = ms / 1000.0;
-
-        std::cout << "Total transferred: " << bytes_transferred << " bytes\n";
-
-        double kib_per_sec = bytes_transferred / 1024.0 / seconds;
-        double mib_per_sec = kib_per_sec / 1024.0;
-
-        double kb_per_sec  = bytes_transferred / 1000.0 / seconds;
-        double mb_per_sec  = kb_per_sec / 1000.0;
-
-        std::cout << "Bandwidth: " << kib_per_sec << " KiB/s\n";
-        std::cout << "Bandwidth: " << mib_per_sec << " MiB/s\n";
-        std::cout << "Bandwidth: " << kb_per_sec  << " kB/s\n";
-        std::cout << "Bandwidth: " << mb_per_sec  << " MB/s\n";
+    if (failed) {
+        std::cerr << "No se pudo conectar. Abortando.\n";
+        return 1;
     }
+
+    io.restart();  // ¡Clave pa que no se quede detenido!
+
+    constexpr int total = 100'000;
+    const std::string key = "resource|consumer";
+    const auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);
+
+    for (int i = 0; i < total; ++i) {
+        post(io, [&, buffer]() {
+            svc.send<response_status>(buffer, [](auto, auto) {});
+        });
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    std::puts("Running inserts...");
+    io.run();
+    std::puts("Finished.");
+
+    const auto end = std::chrono::steady_clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    auto bytes = (buffer.size() + 1) * total;
+    double seconds = ms / 1000.0;
+
+    std::cout << total << " inserts in " << ms << " ms\n";
+    std::cout << "Transferred: " << bytes << " bytes\n";
+    std::cout << "Bandwidth: " << bytes / 1024.0 / seconds << " KiB/s\n";
+    std::cout << "Bandwidth: " << bytes / 1000.0 / seconds << " kB/s\n";
     return 0;
 }

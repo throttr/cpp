@@ -248,7 +248,7 @@ class connection : public std::enable_shared_from_this<connection> {
         socket_, boost::asio::buffer(*_buf), boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
             strand_, [_self, operation, _buf, next](
-                         boost::system::error_code ec, std::size_t) {
+                         const boost::system::error_code &ec, std::size_t) {
               boost::ignore_unused(_self, operation);
               if (ec) {
                 // LCOV_EXCL_START Note: Can't test
@@ -318,7 +318,7 @@ class connection : public std::enable_shared_from_this<connection> {
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_header),
         boost::asio::transfer_exactly(header_size),
-        boost::asio::bind_executor(strand_, [=](boost::system::error_code ec,
+        boost::asio::bind_executor(strand_, [_self, _header, next, operation, head, success](const boost::system::error_code &ec,
                                                 std::size_t) {
                                                   // LCOV_EXCL_START
           if (ec)
@@ -342,11 +342,17 @@ class connection : public std::enable_shared_from_this<connection> {
                 sizeof(value_type));
 
     const auto _value = std::make_shared<std::vector<std::byte>>(_value_size);
+
+    auto _self = shared_from_this();
+
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_value),
         boost::asio::transfer_exactly(_value_size),
         boost::asio::bind_executor(
-            strand_, [=](const boost::system::error_code& ec, std::size_t) {
+            strand_, [_self, _value, header, success, next, operation](const boost::system::error_code& ec, std::size_t) {
+
+              boost::ignore_unused(_self, operation);
+
               // LCOV_EXCL_START
               if (ec)
                 return next(ec, {});
@@ -380,6 +386,9 @@ class connection : public std::enable_shared_from_this<connection> {
         boost::asio::bind_executor(
             strand_, [this, _self, operation, _success_byte, next](
                          const boost::system::error_code& ec, std::size_t) {
+
+              boost::ignore_unused(_self);
+
               // LCOV_EXCL_START
               if (ec) {
                 next(ec, {});
@@ -394,11 +403,12 @@ class connection : public std::enable_shared_from_this<connection> {
   /**
    * Handle query on success byte
    *
+   * @param operation
    * @param success_byte
    * @param next
    */
   void handle_query_success_byte(
-      const std::shared_ptr<write_operation>&,
+      const std::shared_ptr<write_operation>& operation,
       const std::shared_ptr<std::array<std::byte, 1>>& success_byte,
       const std::function<void(boost::system::error_code,
                                std::vector<std::byte>)>& next) {
@@ -417,9 +427,9 @@ class connection : public std::enable_shared_from_this<connection> {
         socket_, boost::asio::buffer(*_rest),
         boost::asio::transfer_exactly(_rest_size),
         boost::asio::bind_executor(
-            strand_, [this, _self, success_byte, _rest, next](
+            strand_, [this, _self, success_byte, _rest, next, operation](
                          const boost::system::error_code& ec2, std::size_t) {
-              boost::ignore_unused(_self);
+              boost::ignore_unused(_self, operation);
 
               // LCOV_EXCL_START Note: Can't test
               if (ec2) {

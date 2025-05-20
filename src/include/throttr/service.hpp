@@ -147,10 +147,9 @@ class service {
     }
 
     _conn->sendMany(
-        requests,
-        [_scoped_handler = std::forward<Handler>(handler)](
-            boost::system::error_code ec,
-            const std::vector<std::vector<std::byte>>& data) mutable {
+        requests, [_scoped_handler = std::forward<Handler>(handler)](
+                      boost::system::error_code ec,
+                      const std::vector<std::vector<std::byte>>& data) mutable {
           if (ec || data.size() != sizeof...(T)) {
             std::move(_scoped_handler)(
                 ec ? ec : make_error_code(boost::system::errc::protocol_error),

@@ -82,6 +82,12 @@ TEST_F(ServiceTestFixture, InsertAndQuerySuccessfully) {
                         std::cerr << "[Query] ec: " << ec2.message() << ", bytes: " << raw_query.size() << "\n";
                         if (ec2) return;
 
+                        std::cerr << "[RAW_QUERY] ";
+                        for (const auto _b : raw_query.at(0)) {
+                            std::cerr << std::hex << std::setw(2) << std::setfill('0') << std::to_integer<int>(_b) << " ";
+                        }
+                        std::cerr << std::dec << "\n"; // NOSONAR
+
                         try { // NOSONAR
                             const auto query_result = response_query::from_buffer(raw_query.at(0));
                             EXPECT_TRUE(query_result.success_);

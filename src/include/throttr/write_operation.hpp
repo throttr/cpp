@@ -18,6 +18,9 @@
 
 #include <boost/system.hpp>
 #include <future>
+#include <throttr/response_get.hpp>
+#include <throttr/response_query.hpp>
+#include <throttr/response_status.hpp>
 #include <vector>
 
 namespace throttr {
@@ -34,6 +37,11 @@ struct write_operation {
    * Heads
    */
   std::vector<std::byte> heads_;
+
+  /**
+   * Responses
+   */
+  std::vector<std::vector<std::byte>> responses_;
 
   /**
    * Promise

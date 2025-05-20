@@ -48,7 +48,7 @@ int main() {
     io.restart();
 
     std::this_thread::sleep_for(std::chrono::seconds(5));
-    
+
     if (!error) {
         constexpr int total = 100;
         const std::string key = "resource|consumer";

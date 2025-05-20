@@ -211,7 +211,7 @@ class connection : public std::enable_shared_from_this<connection> {
       case 0x02: {
         const auto _head = std::make_shared<std::array<std::byte, 1> >();
         (*_head)[0] = std::byte{_type};
-        read_query_value(operation, _head, std::move(_continuation));
+        read_query_value(operation, std::move(_continuation));
         break;
       }
       case 0x06: {
@@ -408,11 +408,9 @@ class connection : public std::enable_shared_from_this<connection> {
    * Read query value
    *
    * @param operation
-   * @param head
    * @param next
    */
   void read_query_value(const std::shared_ptr<write_operation>& operation,
-                        const std::shared_ptr<std::array<std::byte, 1> >& head,
                         std::function<void(boost::system::error_code,
                                            std::vector<std::byte>)> next) {
     constexpr std::size_t payload_size = sizeof(value_type) * 2 + 1 + 1;
@@ -439,8 +437,6 @@ class connection : public std::enable_shared_from_this<connection> {
                 return;
               }
 
-              // Si success == 0x01, seguimos leyendo: quota (4), ttl_type (1),
-              // ttl (4)
               constexpr std::size_t rest_size = sizeof(value_type) * 2 + 1;
               auto rest = std::make_shared<std::vector<std::byte> >(rest_size);
 

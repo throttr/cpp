@@ -130,6 +130,46 @@ class service {
     _connection->send(std::move(buffer), std::move(handler));
   }
 
+  template <typename... T, typename Handler>
+  void send_many(Handler&& handler,
+                 std::vector<std::vector<std::byte>> requests) {
+    if (connections_.empty()) {
+      std::move(handler)(make_error_code(boost::system::errc::not_connected),
+                         T{}...);
+      return;
+    }
+
+    const auto conn = get_connection();
+    if (!conn || !conn->is_open()) {
+      std::move(handler)(
+          make_error_code(boost::system::errc::connection_aborted), T{}...);
+      return;
+    }
+
+    conn->sendMany(
+        std::move(requests),
+        [handler = std::forward<Handler>(handler)](
+            boost::system::error_code ec,
+            const std::vector<std::vector<std::byte>>& data) mutable {
+          if (ec || data.size() != sizeof...(T)) {
+            std::move(handler)(
+                ec ? ec : make_error_code(boost::system::errc::protocol_error),
+                T{}...);
+            return;
+          }
+
+          call_with_parsed<T...>(data, std::move(handler),
+                                 std::index_sequence_for<T...>{});
+        });
+  }
+
+  template <typename... T, std::size_t... I, typename Handler>
+  static void call_with_parsed(const std::vector<std::vector<std::byte>>& data,
+                               Handler&& handler,
+                               std::index_sequence<I...>) {
+    std::move(handler)({}, T::from_buffer(data[I])...);
+  }
+
   /**
    * Send typed
    *

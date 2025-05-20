@@ -5,8 +5,8 @@
 #include <vector>
 
 namespace throttr {
-    using vectorized_buffer = std::vector<std::byte>;
-    using buffers = std::vector<vectorized_buffer>;
-}
+using vectorized_buffer = std::vector<std::byte>;
+using buffers = std::vector<vectorized_buffer>;
+}  // namespace throttr
 
-#endif // THROTTR_ALIASES_HPP
+#endif  // THROTTR_ALIASES_HPP

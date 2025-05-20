@@ -20,6 +20,8 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <functional>
+#include <iomanip>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <throttr/connection.hpp>
@@ -106,9 +108,10 @@ class service {
    * @param buffer
    * @param handler
    */
-  void send_raw(std::vector<std::byte> buffer,
-                std::function<void(boost::system::error_code,
-                                   std::vector<std::vector<std::byte>>)> handler) {
+  void send_raw(
+      std::vector<std::byte> buffer,
+      std::function<void(boost::system::error_code,
+                         std::vector<std::vector<std::byte>>)> handler) {
     // LCOV_EXCL_START
     if (connections_.empty()) {
       // LCOV_EXCL_STOP
@@ -185,8 +188,8 @@ inline void service::send<response_status>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
-    _final_handler({}, response_status::from_buffer(data.at(0)) );
-           });
+    _final_handler({}, response_status::from_buffer(data.at(0)));
+  });
 }
 
 /**
@@ -223,6 +226,13 @@ inline void service::send<response_get>(
     if (ec)
       return _final_handler(ec, {});
     // LCOV_EXCL_STOP
+
+    std::cerr << "[RAW_GET] ";
+    for (const auto _b : data.at(0)) {
+      std::cerr << std::hex << std::setw(2) << std::setfill('0')
+                << std::to_integer<int>(_b) << " ";
+    }
+
     _final_handler({}, response_get::from_buffer(data.at(0)));
   });
 }

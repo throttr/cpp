@@ -22,6 +22,7 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/strand.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <deque>
 #include <functional>
 #include <mutex>
@@ -30,7 +31,6 @@
 #include <throttr/protocol_wrapper.hpp>
 #include <throttr/write_operation.hpp>
 #include <vector>
-#include <boost/core/ignore_unused.hpp>
 
 namespace throttr {
 /**
@@ -87,7 +87,7 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   void send(std::vector<std::byte> buffer,
             std::function<void(boost::system::error_code,
-                               std::vector<std::vector<std::byte> >)> handler) {
+                               std::vector<std::vector<std::byte>>)> handler) {
     auto _self = shared_from_this();
     std::vector _heads = {std::byte{buffer[0]}};
     post(strand_, [_self, _scoped_buffer = std::move(buffer),
@@ -112,9 +112,9 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param handler
    */
   void sendMany(
-      const std::vector<std::vector<std::byte>> &chunks,
+      const std::vector<std::vector<std::byte>>& chunks,
       std::function<void(boost::system::error_code,
-                         std::vector<std::vector<std::byte> >)> handler) {
+                         std::vector<std::vector<std::byte>>)> handler) {
     std::vector<std::byte> _heads;
     std::vector<std::byte> _buffer;
     _heads.reserve(chunks.size());
@@ -202,7 +202,7 @@ class connection : public std::enable_shared_from_this<connection> {
 
     auto _self = shared_from_this();
 
-    auto _continuation = [_self, operation](boost::system::error_code ec,
+    auto _continuation = [_self, operation](const boost::system::error_code &ec,
                                             std::vector<std::byte> response) {
       if (ec) {
         operation->handler(ec, {});
@@ -216,13 +216,13 @@ class connection : public std::enable_shared_from_this<connection> {
 
     switch (_type) {
       case 0x02: {
-        const auto _head = std::make_shared<std::array<std::byte, 1> >();
+        const auto _head = std::make_shared<std::array<std::byte, 1>>();
         (*_head)[0] = std::byte{_type};
         read_query_value(operation, std::move(_continuation));
         break;
       }
       case 0x06: {
-        const auto _head = std::make_shared<std::array<std::byte, 1> >();
+        const auto _head = std::make_shared<std::array<std::byte, 1>>();
         (*_head)[0] = std::byte{_type};
         read_get_header(operation, _head, std::move(_continuation));
         break;
@@ -234,16 +234,16 @@ class connection : public std::enable_shared_from_this<connection> {
   }
 
   void read_status_value(const std::shared_ptr<write_operation>& operation,
-                         std::function<void(boost::system::error_code,
-                                            std::vector<std::byte>)> next) {
+                         const std::function<void(boost::system::error_code,
+                                            std::vector<std::byte>)>& next) {
     auto _self = shared_from_this();
-    auto _buf = std::make_shared<std::vector<std::byte> >(1);
+    auto _buf = std::make_shared<std::vector<std::byte>>(1);
 
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_buf), boost::asio::transfer_exactly(1),
         boost::asio::bind_executor(
-            strand_,
-            [_self, operation, _buf, next](boost::system::error_code ec, std::size_t) {
+            strand_, [_self, operation, _buf, next](
+                         boost::system::error_code ec, std::size_t) {
               boost::ignore_unused(_self, operation);
               if (ec) {
                 next(ec, {});
@@ -261,10 +261,10 @@ class connection : public std::enable_shared_from_this<connection> {
    */
   void read_response_head(
       const std::shared_ptr<write_operation>& operation,
-      const std::function<void(std::shared_ptr<std::array<std::byte, 1> >)>&
+      const std::function<void(std::shared_ptr<std::array<std::byte, 1>>)>&
           on_success) {
     auto _self = shared_from_this();
-    auto _head = std::make_shared<std::array<std::byte, 1> >();
+    auto _head = std::make_shared<std::array<std::byte, 1>>();
 
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_head), boost::asio::transfer_exactly(1),
@@ -296,13 +296,14 @@ class connection : public std::enable_shared_from_this<connection> {
    *
    * @param operation
    * @param head
+   * @param next
    */
   void read_get_header(const std::shared_ptr<write_operation>& operation,
-                       const std::shared_ptr<std::array<std::byte, 1> >& head,
-                       std::function<void(boost::system::error_code,
-                                          std::vector<std::byte>)> next) {
+                       const std::shared_ptr<std::array<std::byte, 1>>& head,
+                       const std::function<void(boost::system::error_code,
+                                          std::vector<std::byte>)>& next) {
     auto _self = shared_from_this();
-    auto _success = std::make_shared<std::array<std::byte, 1> >();
+    auto _success = std::make_shared<std::array<std::byte, 1>>();
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_success),
         boost::asio::transfer_exactly(1),
@@ -326,7 +327,7 @@ class connection : public std::enable_shared_from_this<connection> {
               constexpr std::size_t _header_size = 1 + N + N;
 
               auto _header =
-                  std::make_shared<std::vector<std::byte> >(_header_size);
+                  std::make_shared<std::vector<std::byte>>(_header_size);
               boost::asio::async_read(
                   _self->socket_, boost::asio::buffer(*_header),
                   boost::asio::transfer_exactly(_header_size),
@@ -344,7 +345,7 @@ class connection : public std::enable_shared_from_this<connection> {
                                     _header->data() + 1 + sizeof(value_type),
                                     sizeof(value_type));
 
-                        auto _value = std::make_shared<std::vector<std::byte> >(
+                        auto _value = std::make_shared<std::vector<std::byte>>(
                             _value_size);
                         boost::asio::async_read(
                             _self->socket_, boost::asio::buffer(*_value),
@@ -380,15 +381,16 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param head
    * @param header
    * @param size
+   * @param next
    */
   void read_get_value(const std::shared_ptr<write_operation>& operation,
-                      const std::shared_ptr<std::array<std::byte, 1> >& head,
-                      const std::shared_ptr<std::vector<std::byte> >& header,
+                      const std::shared_ptr<std::array<std::byte, 1>>& head,
+                      const std::shared_ptr<std::vector<std::byte>>& header,
                       value_type size,
-                      std::function<void(boost::system::error_code,
-                                         std::vector<std::byte>)> next) {
+                      const std::function<void(boost::system::error_code,
+                                         std::vector<std::byte>)>& next) {
     auto _self = shared_from_this();
-    auto _value = std::make_shared<std::vector<std::byte> >(size);
+    auto _value = std::make_shared<std::vector<std::byte>>(size);
 
     boost::asio::async_read(
         socket_, boost::asio::buffer(*_value),
@@ -418,14 +420,14 @@ class connection : public std::enable_shared_from_this<connection> {
    * @param next
    */
   void read_query_value(const std::shared_ptr<write_operation>& operation,
-                        std::function<void(boost::system::error_code,
-                                           std::vector<std::byte>)> next) {
+                        const std::function<void(boost::system::error_code,
+                                           std::vector<std::byte>)>& next) {
     constexpr std::size_t payload_size = sizeof(value_type) * 2 + 1 + 1;
 
     auto _self = shared_from_this();
-    auto _rest = std::make_shared<std::vector<std::byte> >(payload_size);
+    auto _rest = std::make_shared<std::vector<std::byte>>(payload_size);
 
-    auto success_byte = std::make_shared<std::array<std::byte, 1> >();
+    auto success_byte = std::make_shared<std::array<std::byte, 1>>();
 
     boost::asio::async_read(
         socket_, boost::asio::buffer(*success_byte),
@@ -445,7 +447,7 @@ class connection : public std::enable_shared_from_this<connection> {
               }
 
               constexpr std::size_t rest_size = sizeof(value_type) * 2 + 1;
-              auto rest = std::make_shared<std::vector<std::byte> >(rest_size);
+              auto rest = std::make_shared<std::vector<std::byte>>(rest_size);
 
               boost::asio::async_read(
                   _self->socket_, boost::asio::buffer(*rest),

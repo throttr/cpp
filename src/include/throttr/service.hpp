@@ -134,8 +134,8 @@ class service {
   void send_many(Handler&& handler,
                  std::vector<std::vector<std::byte>> requests) {
     if (connections_.empty()) {
-      std::forward<Handler>(handler)(make_error_code(boost::system::errc::not_connected),
-                         T{}...);
+      std::forward<Handler>(handler)(
+          make_error_code(boost::system::errc::not_connected), T{}...);
       return;
     }
 
@@ -147,7 +147,7 @@ class service {
     }
 
     conn->sendMany(
-        std::move(requests),
+        requests,
         [handler = std::forward<Handler>(handler)](
             boost::system::error_code ec,
             const std::vector<std::vector<std::byte>>& data) mutable {

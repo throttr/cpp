@@ -36,8 +36,7 @@ class ServiceTestFixture : public ::testing::Test {
     svc_ = std::make_unique<service>(io_.get_executor(), _cfg);
 
     bool _ready = false;
-    svc_->connect([&](boost::system::error_code ec) {
-      // NOSONAR
+    svc_->connect([&](boost::system::error_code ec) {  // NOSONAR
       EXPECT_FALSE(ec);
       _ready = true;
     });

@@ -254,44 +254,6 @@ class connection : public std::enable_shared_from_this<connection> {
   }
 
   /**
-   * Read response head
-   *
-   * @param operation
-   * @param on_success
-   */
-  void read_response_head(
-      const std::shared_ptr<write_operation>& operation,
-      const std::function<void(std::shared_ptr<std::array<std::byte, 1>>)>&
-          on_success) {
-    auto _self = shared_from_this();
-    auto _head = std::make_shared<std::array<std::byte, 1>>();
-
-    boost::asio::async_read(
-        socket_, boost::asio::buffer(*_head), boost::asio::transfer_exactly(1),
-        boost::asio::bind_executor(
-            strand_, [_self, operation, _head, on_success](
-                         const boost::system::error_code& ec, std::size_t) {
-              // LCOV_EXCL_START
-              if (ec) {
-                operation->handler(ec, {});
-                _self->do_write();
-                return;
-              }
-              // LCOV_EXCL_STOP
-
-              if (const auto _status = std::to_integer<uint8_t>((*_head)[0]);
-                  _status == 0x00) {
-                std::vector _full(_head->begin(), _head->end());
-                operation->responses_.emplace_back(std::move(_full));
-                _self->handle_write(operation);
-                return;
-              }
-
-              on_success(_head);
-            }));
-  }
-
-  /**
    * Read GET header
    *
    * @param operation
@@ -375,45 +337,6 @@ class connection : public std::enable_shared_from_this<connection> {
   }
 
   /**
-   * Read GET value
-   *
-   * @param operation
-   * @param head
-   * @param header
-   * @param size
-   * @param next
-   */
-  void read_get_value(const std::shared_ptr<write_operation>& operation,
-                      const std::shared_ptr<std::array<std::byte, 1>>& head,
-                      const std::shared_ptr<std::vector<std::byte>>& header,
-                      value_type size,
-                      const std::function<void(boost::system::error_code,
-                                         std::vector<std::byte>)>& next) {
-    auto _self = shared_from_this();
-    auto _value = std::make_shared<std::vector<std::byte>>(size);
-
-    boost::asio::async_read(
-        socket_, boost::asio::buffer(*_value),
-        boost::asio::transfer_exactly(size),
-        boost::asio::bind_executor(
-            strand_, [_self, operation, head, header, _value, next](
-                         const boost::system::error_code& ec, std::size_t) {
-              if (ec) {
-                // LCOV_EXCL_START
-                next(ec, {});
-                return;
-                // LCOV_EXCL_STOP
-              }
-              std::vector<std::byte> _full;
-              _full.reserve(1 + header->size() + _value->size());
-              _full.insert(_full.end(), head->begin(), head->end());
-              _full.insert(_full.end(), header->begin(), header->end());
-              _full.insert(_full.end(), _value->begin(), _value->end());
-              next({}, std::move(_full));
-            }));
-  }
-
-  /**
    * Read query value
    *
    * @param operation
@@ -469,25 +392,6 @@ class connection : public std::enable_shared_from_this<connection> {
                         next({}, std::move(full));
                       }));
             }));
-  }
-
-  /**
-   * Handle response STATUS
-   *
-   * @param operation
-   */
-  void handle_response_status(
-      const std::shared_ptr<write_operation>& operation) {
-    auto _self = shared_from_this();
-    read_status_value(operation, [_self, operation](auto ec, auto response) {
-      if (ec) {
-        operation->handler(ec, {});
-        _self->do_write();
-        return;
-      }
-      operation->responses_.emplace_back(std::move(response));
-      _self->handle_write(operation);
-    });
   }
 
   /**

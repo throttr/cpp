@@ -139,26 +139,26 @@ class service {
       return;
     }
 
-    const auto conn = get_connection();
-    if (!conn || !conn->is_open()) {
+    const auto _conn = get_connection();
+    if (!_conn || !_conn->is_open()) {
       std::forward<Handler>(handler)(
           make_error_code(boost::system::errc::connection_aborted), T{}...);
       return;
     }
 
-    conn->sendMany(
+    _conn->sendMany(
         requests,
-        [handler = std::forward<Handler>(handler)](
+        [_scoped_handler = std::forward<Handler>(handler)](
             boost::system::error_code ec,
             const std::vector<std::vector<std::byte>>& data) mutable {
           if (ec || data.size() != sizeof...(T)) {
-            std::move(handler)(
+            std::move(_scoped_handler)(
                 ec ? ec : make_error_code(boost::system::errc::protocol_error),
                 T{}...);
             return;
           }
 
-          call_with_parsed<T...>(data, std::move(handler),
+          call_with_parsed<T...>(data, std::move(_scoped_handler),
                                  std::index_sequence_for<T...>{});
         });
   }

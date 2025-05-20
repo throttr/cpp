@@ -26,7 +26,7 @@ int main() {
     // Crear múltiples servicios (una conexión por cada hilo)
     for (int i = 0; i < thread_count; ++i) {
         auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 10});
-        svc->connect([&failed, &connected_count](boost::system::error_code ec) {
+        svc->connect([&failed, &connected_count](const boost::system::error_code &ec) {
             if (ec) {
                 std::cerr << "Connection error: " << ec.message() << "\n";
                 failed = true;
@@ -50,28 +50,29 @@ int main() {
     const std::string key = "resource|consumer";
     const auto buffer = request_insert_builder(100, ttl_types::seconds, 10, key);
 
-    const auto start = std::chrono::steady_clock::now();
-
     // Distribuir envíos entre conexiones
     for (int t = 0; t < thread_count; ++t) {
         auto& svc = *services[t];
         for (int i = 0; i < requests_per_thread; ++i) {
             post(io, [buffer, &svc]() {
-                svc.send<response_status>(buffer, [](auto, auto) {});
+                svc.send<response_status>(buffer, [](auto, auto) {
+                    // This is required
+                });
             });
         }
     }
 
     std::puts("Running inserts...");
+    const auto start = std::chrono::steady_clock::now();
 
-    std::vector<std::thread> pool;
+    std::vector<std::thread> pool; // NOSONAR
     for (int i = 0; i < thread_count; ++i)
-        pool.emplace_back([&] {
+        pool.emplace_back([&io] {
             // This should start to run the test
             io.run();
         });
 
-    for (auto& t : pool)
+    for (auto& t : pool) // NOSONAR
         t.join();
 
     std::puts("Finished.");
@@ -82,9 +83,9 @@ int main() {
     auto bytes = (buffer.size() + 1) * total_requests;
 
     std::cout << total_requests << " inserts in " << ms << " ms\n";
-    std::cout << "Transferred: " << bytes << " bytes\n";
-    std::cout << "Bandwidth: " << bytes / 1024.0 / seconds << " KiB/s\n";
-    std::cout << "Bandwidth: " << bytes / 1000.0 / seconds << " kB/s\n";
+    std::cout << "Transferred: " << bytes / 1024.0 / 1024.0 << " MiB\n";
+    std::cout << "Bandwidth: " << bytes / 1024.0 / 1024.0 / seconds << " MiB/s\n";
+    std::cout << "Bandwidth: " << bytes / 1000.0 / 1024.0 / seconds << " MB/s\n";
 
     return 0;
 }

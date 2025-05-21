@@ -48,7 +48,7 @@ int main() {
     io.restart();
 
     const std::string key = "resource|consumer";
-    const auto buffer1 = request_insert_builder(100, ttl_types::hours, 60, key);
+    const auto buffer1 = request_query_builder(key);
     const auto buffer2 = request_query_builder(key);
     const auto buffer3 = request_query_builder(key);
     const auto buffer4 = request_query_builder(key);
@@ -60,7 +60,7 @@ int main() {
     const auto buffer10 = request_query_builder(key);
 
     std::vector<std::byte> _concatenated;
-    _concatenated.reserve(buffer1.size() + buffer2.size() + buffer3.size() + buffer4.size() + buffer5.size());
+    _concatenated.reserve(buffer1.size() + buffer2.size() + buffer3.size() + buffer4.size() + buffer5.size() + buffer6.size() + buffer7.size() + buffer8.size() + buffer9.size() + buffer10.size());
     _concatenated.insert(_concatenated.end(), buffer1.begin(), buffer1.end());
     _concatenated.insert(_concatenated.end(), buffer2.begin(), buffer2.end());
     _concatenated.insert(_concatenated.end(), buffer3.begin(), buffer3.end());

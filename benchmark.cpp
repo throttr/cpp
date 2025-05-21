@@ -48,25 +48,7 @@ int main() {
     io.restart();
 
     const std::string key = "resource|consumer";
-
-    auto &svc_ = *services[0];
-    post(io, [&]() { // NOSONAR
-        const auto buffer1 = request_insert_builder(100, ttl_types::hours, 60, key);
-        svc_.send_raw(buffer1,
-                      [&]( // NOSONAR
-                  const boost::system::error_code &ec,
-                  const std::vector<std::vector<std::byte> > &) {
-                          if (ec) {
-                              std::cerr << "Error sending status: " << ec.message() << "\n";
-                          } else {
-                              // This is required ...
-                          }
-                          // This also...
-                      });
-    });
-
-
-    const auto buffer1 = request_query_builder(key);
+    const auto buffer1 = request_insert_builder(100, ttl_types::hours, 60, key);
     const auto buffer2 = request_query_builder(key);
     const auto buffer3 = request_query_builder(key);
     const auto buffer4 = request_query_builder(key);

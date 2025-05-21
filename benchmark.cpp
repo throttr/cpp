@@ -79,16 +79,17 @@ int main() {
     for (int t = 0; t < thread_count; ++t) {
         auto& svc = *services[t];
         for (int i = 0; i < requests_per_thread; ++i) {
-            post(io, [&]() {
+            post(io, [&]() { // NOSONAR
                 svc.send_raw(_concatenated,
-                    [&](
+                    [&]( // NOSONAR
                     const boost::system::error_code& ec,
-                    const std::vector<std::vector<std::byte>> &ok) {
+                    const std::vector<std::vector<std::byte>> &) {
                     if (ec) {
                         std::cerr << "Error sending status: " << ec.message() << "\n";
                     } else {
+                        // This is required ...
                     }
-                    // This is required
+                    // This also...
                 });
             });
         }

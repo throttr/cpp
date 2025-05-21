@@ -14,8 +14,8 @@ using namespace throttr;
 using namespace boost::asio;
 
 int main() {
-    constexpr int thread_count = 8;
-    constexpr int requests_per_thread = 1'000'000;
+    constexpr int thread_count = 4;
+    constexpr int requests_per_thread = 10'000;
     constexpr int total_requests = thread_count * requests_per_thread;
 
     io_context io(thread_count);

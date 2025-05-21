@@ -74,6 +74,10 @@ class connection : public std::enable_shared_from_this<connection> {
               socket_, endpoints,
               [self, _final_handler = std::move(_scope_handler)](
                   const boost::system::error_code& connect_ec, auto) mutable {
+                if (!connect_ec) {
+                  boost::asio::ip::tcp::no_delay option(true);
+                  self->socket_.set_option(option);
+                }
                 _final_handler(connect_ec);
               });
         });

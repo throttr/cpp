@@ -48,7 +48,7 @@ int main() {
     io.restart();
 
     const std::string key = "resource|consumer";
-    const auto buffer1 = request_query_builder(key);
+    const auto buffer1 = request_insert_builder(0, ttl_types::minutes, 10, key);
     const auto buffer2 = request_query_builder(key);
     const auto buffer3 = request_query_builder(key);
     const auto buffer4 = request_query_builder(key);

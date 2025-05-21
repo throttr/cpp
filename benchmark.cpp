@@ -25,7 +25,7 @@ int main() {
     std::atomic failed = false;
 
     for (int i = 0; i < thread_count; ++i) {
-        auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 64});
+        auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 16});
         svc->connect([&failed, &connected_count](const boost::system::error_code &ec) {
             if (ec) {
                 std::cerr << "Connection error: " << ec.message() << "\n";

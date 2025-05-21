@@ -15,11 +15,11 @@ using namespace boost::asio;
 
 int main() {
     constexpr int thread_count = 4;
-    constexpr int requests_per_thread = 10'000;
+    constexpr int requests_per_thread = 250'000;
     constexpr int total_requests = thread_count * requests_per_thread;
 
     io_context io(thread_count);
-    std::vector<std::unique_ptr<service>> services;
+    std::vector<std::unique_ptr<service> > services;
 
     std::atomic connected_count = 0;
     std::atomic failed = false;
@@ -48,6 +48,24 @@ int main() {
     io.restart();
 
     const std::string key = "resource|consumer";
+
+    auto &svc_ = *services[0];
+    post(io, [&]() { // NOSONAR
+        const auto buffer1 = request_insert_builder(100, ttl_types::hours, 60, key);
+        svc_.send_raw(buffer1,
+                      [&]( // NOSONAR
+                  const boost::system::error_code &ec,
+                  const std::vector<std::vector<std::byte> > &) {
+                          if (ec) {
+                              std::cerr << "Error sending status: " << ec.message() << "\n";
+                          } else {
+                              // This is required ...
+                          }
+                          // This also...
+                      });
+    });
+
+
     const auto buffer1 = request_query_builder(key);
     const auto buffer2 = request_query_builder(key);
     const auto buffer3 = request_query_builder(key);
@@ -73,29 +91,27 @@ int main() {
     _concatenated.insert(_concatenated.end(), buffer10.begin(), buffer10.end());
 
 
-    std::vector requests = {buffer1, buffer2, buffer3, buffer4, buffer5};
-
     // Distribuir envíos entre conexiones
     for (int t = 0; t < thread_count; ++t) {
-        auto& svc = *services[t];
+        auto &svc = *services[t];
         for (int i = 0; i < requests_per_thread; ++i) {
             post(io, [&]() { // NOSONAR
                 svc.send_raw(_concatenated,
-                    [&]( // NOSONAR
-                    const boost::system::error_code& ec,
-                    const std::vector<std::vector<std::byte>> &) {
-                    if (ec) {
-                        std::cerr << "Error sending status: " << ec.message() << "\n";
-                    } else {
-                        // This is required ...
-                    }
-                    // This also...
-                });
+                             [&]( // NOSONAR
+                         const boost::system::error_code &ec,
+                         const std::vector<std::vector<std::byte> > &) {
+                                 if (ec) {
+                                     std::cerr << "Error sending status: " << ec.message() << "\n";
+                                 } else {
+                                     // This is required ...
+                                 }
+                                 // This also...
+                             });
             });
         }
     }
 
-    std::puts("Running inserts...");
+    std::puts("Running inserts and queries...");
     const auto start = std::chrono::steady_clock::now();
 
     std::vector<std::thread> pool; // NOSONAR
@@ -105,7 +121,7 @@ int main() {
             io.run();
         });
 
-    for (auto& t : pool) // NOSONAR
+    for (auto &t: pool) // NOSONAR
         t.join();
 
     std::puts("Finished.");
@@ -115,7 +131,7 @@ int main() {
     double seconds = ms / 1000.0;
     auto bytes = (buffer1.size() + 1) * 10 * total_requests;
 
-    std::cout << total_requests * 10 << " queries (pipeline) in " << ms << " ms\n";
+    std::cout << "1 insert and " << total_requests * 10 << " queries (pipeline) in " << ms << " ms\n";
     std::cout << "Transferred: " << bytes / 1024.0 / 1024.0 << " MiB\n";
     std::cout << "Bandwidth: " << bytes / 1024.0 / 1024.0 / seconds << " MiB/s\n";
     std::cout << "Bandwidth: " << bytes / 1000.0 / 1024.0 / seconds << " MB/s\n";

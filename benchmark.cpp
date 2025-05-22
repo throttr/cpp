@@ -15,7 +15,7 @@ using namespace boost::asio;
 
 int main() {
     constexpr int thread_count = 4;
-    constexpr int requests_per_thread = 25'000;
+    constexpr int requests_per_thread = 250'000;
     constexpr int total_requests = thread_count * requests_per_thread;
 
     io_context io(thread_count);
@@ -25,7 +25,7 @@ int main() {
     std::atomic failed = false;
 
     for (int i = 0; i < thread_count; ++i) {
-        auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 64});
+        auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 32});
         svc->connect([&failed, &connected_count](const boost::system::error_code &ec) {
             if (ec) {
                 std::cerr << "Connection error: " << ec.message() << "\n";

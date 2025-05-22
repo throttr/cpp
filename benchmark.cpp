@@ -15,7 +15,7 @@ using namespace boost::asio;
 
 int main() {
     constexpr int thread_count = 4;
-    constexpr int requests_per_thread = 250'000;
+    constexpr int requests_per_thread = 25'000;
     constexpr int total_requests = thread_count * requests_per_thread;
 
     io_context io(thread_count);

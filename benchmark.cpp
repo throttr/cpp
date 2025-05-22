@@ -15,7 +15,7 @@ using namespace boost::asio;
 
 int main() {
     constexpr int thread_count = 4;
-    constexpr int requests_per_thread = 10'000;
+    constexpr int requests_per_thread = 25'000;
     constexpr int total_requests = thread_count * requests_per_thread;
 
     io_context io(thread_count);
@@ -25,7 +25,7 @@ int main() {
     std::atomic failed = false;
 
     for (int i = 0; i < thread_count; ++i) {
-        auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 16});
+        auto svc = std::make_unique<service>(io.get_executor(), service_config{"throttr", 9000, 64});
         svc->connect([&failed, &connected_count](const boost::system::error_code &ec) {
             if (ec) {
                 std::cerr << "Connection error: " << ec.message() << "\n";
@@ -48,7 +48,7 @@ int main() {
     io.restart();
 
     const std::string key = "resource|consumer";
-    const auto buffer1 = request_insert_builder(0, ttl_types::minutes, 10, key);
+    const auto buffer1 = request_insert_builder(32, ttl_types::seconds, 10, key);
     const auto buffer2 = request_query_builder(key);
     const auto buffer3 = request_query_builder(key);
     const auto buffer4 = request_query_builder(key);
